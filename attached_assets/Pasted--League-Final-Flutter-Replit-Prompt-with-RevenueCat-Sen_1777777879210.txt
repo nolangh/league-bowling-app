@@ -1,0 +1,127 @@
+# League — Final Flutter + Replit Prompt (with RevenueCat, Sentry, Aikido)
+
+## Product Overview
+
+Build **League** — a premium, modern, mobile-dominant bowling app for serious bowlers.
+
+**Core Value**:
+- Advanced personal stats & game tracking with fast, cheap AI scorecard verification
+- Social feed for sharing moments (short videos) and asking advice
+- Async money challenges with skill-based matching and fair monetization
+- Public + private leagues + team features
+
+The app must feel **mature, confident, hip, and energetic** — high-end sports tech with a fun, modern edge (think Strava + Whoop + a touch of playful confidence). It should make bowling feel like a respected athletic pursuit without being overly serious or corporate.
+
+**Design System (Wise-Inspired but Lighter)**:
+- Vibrant lime-green accent (#9fe870 range) on warm off-white
+- Near-black primary text (#0e0f0c)
+- Bold but energetic display typography (Google Fonts Inter or Poppins with strong weights)
+- Pill buttons with satisfying scale/grow tap animations
+- Large rounded cards (20–32px radius)
+- Minimal elegant shadows
+- Premium yet approachable — clean, confident, fun without being childish
+
+## Tech Stack (Final)
+
+- **Frontend**: Flutter 3.29+ (Dart) — iOS, Android, Web (PWA), Desktop from one codebase
+- **Backend**: Supabase (PostgreSQL + Auth + Storage + Realtime + Edge Functions)
+- **Subscriptions / Paywall**: **RevenueCat** (best-in-class for Flutter, handles Apple/Google IAP + Stripe web, easy Pro/Free tier logic)
+- **Error Monitoring**: **Sentry** (Flutter SDK for crash reporting, performance monitoring, session replays)
+- **Security**: **Aikido** (SAST, dependency scanning, secret detection, runtime protection — integrate via CI/CD and runtime checks)
+- **Payments (Challenges)**: Stripe (via RevenueCat for subscriptions + direct Edge Functions for challenge pots)
+- **AI**: **Google Gemini 2.0 Flash** (latest Flash model) — via `google_generative_ai` package or Edge Function
+  - Cheapest high-quality vision model for scorecard parsing + structured JSON output
+- **State Management**: Riverpod (recommended)
+- **Theming**: Material 3 + custom design tokens
+- **Platform**: Replit (Flutter template) — easy to run and share
+
+## Core Features (Free vs Pro)
+
+### Free Tier
+- Score logging (manual + photo → Gemini 2.0 Flash AI verification)
+- Basic stats (career avg, high game, total games)
+- Full social Moments feed (video + text, likes, comments, Pin)
+- Questions & Advice public feed
+- Local Partner Finder (post/browse with location)
+- Post & accept money challenges ($1 flat posting fee when staking)
+- Browse & join public leagues
+- Join existing teams
+
+### Pro Tier ($4.99/mo or $49.99/yr — managed via RevenueCat)
+- Unlimited high-accuracy AI scorecard verification
+- Advanced analytics (pin leaves, breakdowns, trends, heatmaps)
+- Ball arsenal manager + performance matrix
+- Oil pattern intelligence + smart suggestions
+- AI Form Coach (video → form feedback)
+- Create private leagues/seasons
+- Create public leagues
+- Create & manage teams + full team analytics/leaderboards
+- Rival system (up to 5 rivals)
+- Practice drill tracker
+- Season summary PDF export
+- Alley-specific insights
+- **0% posting fee** on all money challenges (biggest upgrade incentive)
+- Ad-free + priority support
+
+## Money Challenge Rules
+- Post verified score + stake ($5–$50)
+- Free users pay $1 flat posting fee
+- Pro users pay $0
+- Acceptor bowls fresh game after accepting (Gemini verified)
+- Winner takes full pot (no winner-side fees)
+- Skill protection (±40–60 rating band)
+- Elo-style rating updates after every match
+
+## Leagues & Teams
+- **Public Leagues**: Browse/join, auto standings, weekly challenges
+- **Private Leagues** (Pro): Create custom seasons with stats + trash talk
+- **Teams**: Create/join, team stats on profile, local/global leaderboards, team challenges
+
+## Database Schema (Supabase)
+Tables with RLS, indexes, realtime:
+- users, games, challenges, teams, team_members, leagues, league_memberships, rivals, moments, posts, balls
+
+Seed realistic demo data.
+
+## Key Screens (Build These First)
+1. Onboarding (profile + 3 placement games)
+2. Home / Discover Challenges (filters + FAB)
+3. Profile (rank, team, stats, activity)
+4. Post Game (camera → Gemini verification → oil/ball → log)
+5. Social Moments Feed (video + text, realtime)
+6. Challenge Posting Flow (score → stake → fee notice → post)
+7. Accept Challenge (opponent info → accept & pay)
+8. Public Leagues Discovery (search + create Pro)
+9. Pricing / Upgrade (Free vs Pro via RevenueCat)
+10. Team Profile (stats, members, leaderboards)
+
+## Non-Functional Requirements
+- Mobile-first, beautiful on latest iOS/Android
+- Smooth animations (scale on buttons/FAB)
+- Excellent empty/loading/error states
+- Clear Free vs Pro distinction (RevenueCat paywall)
+- All money via Stripe/RevenueCat with secure escrow
+- Gemini 2.0 Flash verification (fast, reliable, editable)
+- PWA support + offline basic logging
+- Sentry error tracking + performance monitoring
+- Aikido security scanning in CI + runtime checks
+
+## Output Instructions for Replit + Flutter
+
+1. Create complete Flutter 3.29+ project ready for Replit (official Flutter template).
+2. Integrate Supabase Flutter SDK + all tables/RLS/seed data.
+3. Set up RevenueCat for subscriptions + paywall (Free vs Pro logic).
+4. Add Sentry Flutter SDK for crash + performance monitoring.
+5. Configure Aikido (CI scanning + runtime security checks).
+6. Integrate Google Gemini 2.0 Flash for scorecard verification (structured JSON).
+7. Build all 10 key screens with full interactivity and the lighter, energetic Wise-inspired design system.
+8. Implement complete challenge flow (posting fee, rating protection, full pot payout).
+9. Add beautiful success states (confetti on wins) and upgrade modals.
+10. Include clean README with:
+    - How to run in Replit
+    - Environment variables (Supabase, RevenueCat, Stripe, Gemini, Sentry, Aikido)
+    - Build & deployment notes (iOS/Android + PWA)
+
+Make this feel like a **premium yet energetic, production-ready mobile product** — thoughtful, confident, fun, and expensive.
+
+Start building now.
