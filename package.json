@@ -12,10 +12,5 @@
   "devDependencies": {
     "prettier": "^3.8.1",
     "typescript": "~5.9.2"
-  },
-  "dependencies": {
-    "@octokit/rest": "^22.0.1",
-    "@replit/connectors-sdk": "^0.4.0",
-    "@replit/revenuecat-sdk": "^4.2.0"
   }
 }
