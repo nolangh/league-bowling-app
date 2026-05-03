@@ -30,6 +30,11 @@ router.post("/games", async (req, res): Promise<void> => {
     return;
   }
 
+  if (parsed.data.score < 0 || parsed.data.score > 300) {
+    res.status(400).json({ error: "Score must be between 0 and 300" });
+    return;
+  }
+
   const { data: game, error: insertErr } = await supabaseAdmin
     .from("games")
     .insert({

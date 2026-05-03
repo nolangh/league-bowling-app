@@ -93,6 +93,31 @@ All routes are under `/api` and require `Authorization: Bearer <supabase_jwt>`:
 - `GET /leagues` — all leagues with joined status
 - `POST /leagues/:id/join` — join a league
 
+## Testing
+```bash
+# Run API unit + integration tests (75 tests, ~5s)
+pnpm --filter @workspace/api-server run test
+
+# Run with coverage report
+pnpm --filter @workspace/api-server run test:coverage
+```
+
+### Test structure (`artifacts/api-server/src/__tests__/`)
+- `timeAgo.test.ts` — unit tests for the timeAgo utility
+- `health.test.ts` — GET /api/healthz
+- `auth.test.ts` — supabaseAuthMiddleware (real middleware, Supabase mocked)
+- `users.test.ts` — GET/PATCH /api/users/me
+- `games.test.ts` — GET/POST /api/games (incl. score 0–300 validation)
+- `challenges.test.ts` — GET/POST challenges + accept flow
+- `moments.test.ts` — GET/POST moments + like/unlike
+- `leagues.test.ts` — GET leagues + join flow
+
+### Mock strategy
+- `setup.ts` mocks `../lib/supabase` → `supabaseAdmin.from` as `vi.fn()` (configurable per-test)
+- Each route test file mocks `../middlewares/supabaseAuth` inline (sets `req.userId = 1`)
+- `auth.test.ts` uses the REAL middleware against the mocked Supabase client
+- E2e test credentials: `e2etest@league.app` / `TestLeague2024!`
+
 ## Database Commands
 ```bash
 # Re-seed Supabase with NPC data
