@@ -6,17 +6,19 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { Alert } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider } from "@/context/AppContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
+import { useColors } from "@/hooks/useColors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -25,14 +27,34 @@ const queryClient = new QueryClient();
 try {
   initializeRevenueCat();
 } catch (err: any) {
-  // RevenueCat not configured yet — will be set up after seed script runs
   console.log("RevenueCat:", err?.message);
+}
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth();
+  const colors = useColors();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!session) {
+    return <Redirect href="/auth/sign-in" />;
+  }
+
+  return <>{children}</>;
 }
 
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/sign-up" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -57,15 +79,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <SubscriptionProvider>
-            <AppProvider>
-              <GestureHandlerRootView>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </AppProvider>
-          </SubscriptionProvider>
+          <AuthProvider>
+            <SubscriptionProvider>
+              <AuthGate>
+                <AppProvider>
+                  <GestureHandlerRootView>
+                    <KeyboardProvider>
+                      <RootLayoutNav />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </AppProvider>
+              </AuthGate>
+            </SubscriptionProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

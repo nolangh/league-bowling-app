@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { api } from "../lib/api";
+import { supabase } from "../lib/supabase";
 
 export type Rank =
   | "Rookie"
@@ -113,18 +114,18 @@ export function getRankColor(rank: Rank): string {
 }
 
 const FALLBACK_USER: UserProfile = {
-  name: "Alex Chen",
-  username: "STRIKER_AC",
-  rank: "Legend",
-  level: 42,
-  xp: 12450,
-  xpToNext: 15000,
+  name: "Bowler",
+  username: "BOWLER",
+  rank: "Rookie",
+  level: 1,
+  xp: 0,
+  xpToNext: 1000,
   isPro: false,
-  careerAvg: 218,
-  highGame: 300,
-  totalGames: 847,
-  team: "Strike Force",
-  rating: 1842,
+  careerAvg: 0,
+  highGame: 0,
+  totalGames: 0,
+  team: "Solo",
+  rating: 1000,
 };
 
 interface AppContextValue {
@@ -147,109 +148,43 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 type ApiGame = {
-  id: number;
-  score: number;
-  date: string;
-  alley: string;
-  oilPattern: string;
-  ballUsed: string;
-  notes: string;
-  verified: boolean;
+  id: number; score: number; date: string; alley: string;
+  oilPattern: string; ballUsed: string; notes: string; verified: boolean;
 };
-
 type ApiChallenge = {
-  id: number;
-  username: string;
-  rank: string;
-  rankColor: string;
-  postedScore: number;
-  stake: number;
-  timeAgo: string;
-  isPro: boolean;
-  status: string;
-  initials: string;
-  avatarColor: string;
+  id: number; username: string; rank: string; rankColor: string;
+  postedScore: number; stake: number; timeAgo: string; isPro: boolean;
+  status: string; initials: string; avatarColor: string;
 };
-
 type ApiMoment = {
-  id: number;
-  username: string;
-  rank: string;
-  rankColor: string;
-  content: string;
-  score?: number | null;
-  type: string;
-  likes: number;
-  comments: number;
-  timeAgo: string;
-  liked: boolean;
-  initials: string;
-  avatarColor: string;
+  id: number; username: string; rank: string; rankColor: string;
+  content: string; score?: number | null; type: string;
+  likes: number; comments: number; timeAgo: string; liked: boolean;
+  initials: string; avatarColor: string;
 };
-
 type ApiLeague = {
-  id: number;
-  name: string;
-  description: string;
-  members: number;
-  type: string;
-  level: string;
-  avgScore: number;
-  weeklyChallenge?: string | null;
-  joined: boolean;
+  id: number; name: string; description: string; members: number;
+  type: string; level: string; avgScore: number;
+  weeklyChallenge?: string | null; joined: boolean;
 };
-
 type ApiUser = {
-  id: number;
-  name: string;
-  username: string;
-  rank: string;
-  level: number;
-  xp: number;
-  xpToNext: number;
-  isPro: boolean;
-  careerAvg: number;
-  highGame: number;
-  totalGames: number;
-  team: string;
-  rating: number;
+  id: number; name: string; username: string; rank: string;
+  level: number; xp: number; xpToNext: number; isPro: boolean;
+  careerAvg: number; highGame: number; totalGames: number;
+  team: string; rating: number;
 };
 
-function toGame(g: ApiGame): Game {
-  return { ...g, id: String(g.id) };
-}
-
+function toGame(g: ApiGame): Game { return { ...g, id: String(g.id) }; }
 function toChallenge(c: ApiChallenge): Challenge {
-  return {
-    ...c,
-    id: String(c.id),
-    rank: c.rank as Rank,
-    status: c.status as Challenge["status"],
-  };
+  return { ...c, id: String(c.id), rank: c.rank as Rank, status: c.status as Challenge["status"] };
 }
-
 function toMoment(m: ApiMoment): Moment {
-  return {
-    ...m,
-    id: String(m.id),
-    rank: m.rank as Rank,
-    score: m.score ?? undefined,
-    type: m.type as Moment["type"],
-  };
+  return { ...m, id: String(m.id), rank: m.rank as Rank, score: m.score ?? undefined, type: m.type as Moment["type"] };
 }
-
 function toLeague(l: ApiLeague): League {
-  return {
-    ...l,
-    id: String(l.id),
-    type: l.type as League["type"],
-    weeklyChallenge: l.weeklyChallenge ?? undefined,
-  };
+  return { ...l, id: String(l.id), type: l.type as League["type"], weeklyChallenge: l.weeklyChallenge ?? undefined };
 }
-
-function toUser(u: ApiUser): UserProfile {
-  return { ...u, rank: u.rank as Rank };
-}
+function toUser(u: ApiUser): UserProfile { return { ...u, rank: u.rank as Rank }; }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile>(FALLBACK_USER);
@@ -259,10 +194,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [moments, setMoments] = useState<Moment[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
+  const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     refreshAll().finally(() => setLoading(false));
+    setupRealtime();
+    return () => {
+      if (realtimeRef.current) {
+        supabase.removeChannel(realtimeRef.current);
+      }
+    };
   }, []);
+
+  function setupRealtime() {
+    const channel = supabase
+      .channel("moments-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "moments" },
+        (payload) => {
+          const raw = payload.new as ApiMoment & { created_at: string };
+          const newMoment: Moment = {
+            id: String(raw.id),
+            username: raw.username,
+            rank: raw.rank as Rank,
+            rankColor: raw.rank_color ?? "#a0a0a0",
+            content: raw.content,
+            score: raw.score ?? undefined,
+            type: raw.type as Moment["type"],
+            likes: raw.likes ?? 0,
+            comments: raw.comments ?? 0,
+            timeAgo: "just now",
+            liked: false,
+            initials: raw.initials ?? raw.username.slice(0, 2),
+            avatarColor: raw.avatar_color ?? "#1a3c2a",
+          };
+          setMoments((prev) => [newMoment, ...prev]);
+        }
+      )
+      .subscribe();
+    realtimeRef.current = channel;
+  }
 
   async function refreshAll() {
     try {
@@ -283,15 +255,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (momentsRes.status === "fulfilled") setMoments(momentsRes.value.map(toMoment));
       if (leaguesRes.status === "fulfilled") setLeagues(leaguesRes.value.map(toLeague));
     } catch {
-      // silently keep fallback state
+      // keep fallback state
     }
   }
 
   const logGame = async (gameData: Omit<Game, "id">) => {
     const created = await api.post<ApiGame>("/games", gameData);
-    const newGame = toGame(created);
-    setGames((prev) => [newGame, ...prev]);
-
+    setGames((prev) => [toGame(created), ...prev]);
     const updatedUser = await api.get<ApiUser>("/users/me");
     setUser(toUser(updatedUser));
   };
@@ -299,7 +269,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toggleLikeMoment = async (momentId: string) => {
     const current = moments.find((m) => m.id === momentId);
     if (!current) return;
-
     try {
       let updated: ApiMoment;
       if (current.liked) {
@@ -307,11 +276,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         updated = await api.post<ApiMoment>(`/moments/${momentId}/like`);
       }
-      setMoments((prev) =>
-        prev.map((m) => (m.id === momentId ? toMoment(updated) : m))
-      );
+      setMoments((prev) => prev.map((m) => (m.id === momentId ? toMoment(updated) : m)));
     } catch {
-      // optimistic fallback
       setMoments((prev) =>
         prev.map((m) =>
           m.id === momentId
@@ -325,21 +291,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const acceptChallenge = async (challengeId: string) => {
     try {
       await api.post<ApiChallenge>(`/challenges/${challengeId}/accept`);
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
     setChallenges((prev) => prev.filter((c) => c.id !== challengeId));
   };
 
   const postChallenge = async (score: number, stake: number) => {
     try {
-      const created = await api.post<ApiChallenge>("/challenges", {
-        postedScore: score,
-        stake,
-      });
+      const created = await api.post<ApiChallenge>("/challenges", { postedScore: score, stake });
       setMyActiveChallenges((prev) => [toChallenge(created), ...prev]);
     } catch {
-      // fallback: add locally
       const newChallenge: Challenge = {
         id: Date.now().toString(),
         username: user.username,
@@ -363,41 +323,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const updated = await api.patch<ApiUser>("/users/me", { isPro });
       setUser(toUser(updated));
-    } catch {
-      // keep optimistic update
-    }
+    } catch { /* keep optimistic */ }
   };
 
   const joinLeague = async (leagueId: string) => {
     try {
       const updated = await api.post<ApiLeague>(`/leagues/${leagueId}/join`);
-      setLeagues((prev) =>
-        prev.map((l) => (l.id === leagueId ? toLeague(updated) : l))
-      );
-    } catch {
-      // ignore
-    }
+      setLeagues((prev) => prev.map((l) => (l.id === leagueId ? toLeague(updated) : l)));
+    } catch { /* ignore */ }
   };
 
   return (
-    <AppContext.Provider
-      value={{
-        user,
-        games,
-        challenges,
-        myActiveChallenges,
-        moments,
-        leagues,
-        loading,
-        logGame,
-        toggleLikeMoment,
-        acceptChallenge,
-        postChallenge,
-        setUserPro,
-        joinLeague,
-        refreshAll,
-      }}
-    >
+    <AppContext.Provider value={{
+      user, games, challenges, myActiveChallenges, moments, leagues, loading,
+      logGame, toggleLikeMoment, acceptChallenge, postChallenge, setUserPro, joinLeague, refreshAll,
+    }}>
       {children}
     </AppContext.Provider>
   );

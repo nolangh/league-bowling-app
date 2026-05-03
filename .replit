@@ -36,6 +36,10 @@ externalPort = 3000
 localPort = 24977
 externalPort = 3001
 
+[[ports]]
+localPort = 24978
+externalPort = 3003
+
 [nix]
 channel = "stable-25_05"
 
@@ -50,3 +54,4 @@ REVENUECAT_TEST_STORE_APP_ID = "app4b0037d52a"
 REVENUECAT_APPLE_APP_STORE_APP_ID = "appb5da2a2d44"
 REVENUECAT_GOOGLE_PLAY_STORE_APP_ID = "app3f4187bcf4"
 SUPABASE_URL = "https://wtgphatzheodjsqznedg.supabase.co"
+EXPO_PUBLIC_SUPABASE_URL = "https://wtgphatzheodjsqznedg.supabase.co"

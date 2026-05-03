@@ -1,14 +1,18 @@
 import { defineConfig } from "drizzle-kit";
 import path from "path";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
+const url =
+  process.env.SUPABASE_DB_URL ??
+  (process.env.SUPABASE_DB_PASSWORD
+    ? `postgresql://postgres.wtgphatzheodjsqznedg:${encodeURIComponent(process.env.SUPABASE_DB_PASSWORD)}@aws-0-us-east-1.pooler.supabase.com:5432/postgres`
+    : process.env.DATABASE_URL);
+
+if (!url) {
+  throw new Error("No database URL configured");
 }
 
 export default defineConfig({
   schema: path.join(__dirname, "./src/schema/index.ts"),
   dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL,
-  },
+  dbCredentials: { url },
 });
