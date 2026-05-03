@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "yEF5rZwRKPnOA3FUumK5g"
+uri = "file://artifacts/league/assets/images/icon.png"
+type = "image"
+title = "league app icon"
+
+[[generated]]
+id = "tY1t_Xmz148pB1QuaWxK3"
+uri = "file://artifacts/league/assets/images/hero_bowling.png"
+type = "image"
+title = "bowling hero image"
+
+[[generated]]
+id = "vqrv1yfsiMAxiVmqKmQVk"
+uri = "file://artifacts/league/assets/images/strike_moment.png"
+type = "image"
+title = "bowling strike moment"
+
+[[generated]]
+id = "NsYPH4Noy-ADZ2IpKj_aA"
+uri = "file://artifacts/league/assets/images/scorecard.png"
+type = "image"
+title = "bowling scorecard"

@@ -1,0 +1,31 @@
+const colors = {
+  light: {
+    text: "#0e0f0c",
+    tint: "#9fe870",
+    background: "#f0f0e8",
+    foreground: "#0e0f0c",
+    card: "#e8e8de",
+    cardForeground: "#0e0f0c",
+    primary: "#9fe870",
+    primaryForeground: "#0e0f0c",
+    secondary: "#e2e2d8",
+    secondaryForeground: "#0e0f0c",
+    muted: "#d8d8ce",
+    mutedForeground: "#8a8a7e",
+    accent: "#9fe870",
+    accentForeground: "#0e0f0c",
+    destructive: "#ef4444",
+    destructiveForeground: "#ffffff",
+    border: "#d0d0c4",
+    input: "#d0d0c4",
+    darkCard: "#1a1a16",
+    darkCardText: "#ffffff",
+    rankGold: "#f5c842",
+    rankDiamond: "#60c8ff",
+    rankPlatinum: "#c8a8e8",
+    rankLegend: "#9fe870",
+  },
+  radius: 24,
+};
+
+export default colors;
