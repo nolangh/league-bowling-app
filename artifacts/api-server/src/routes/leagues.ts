@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
-import { db, leaguesTable, leagueMembershipsTable } from "@workspace/db";
+import { supabaseAdmin } from "../lib/supabase";
 import {
   ListLeaguesResponse,
   JoinLeagueParams,
@@ -9,32 +8,28 @@ import {
 
 const router: IRouter = Router();
 
-async function formatLeague(
-  league: typeof leaguesTable.$inferSelect,
-  userId: number
-) {
-  const [membership] = await db
-    .select()
-    .from(leagueMembershipsTable)
-    .where(
-      and(
-        eq(leagueMembershipsTable.leagueId, league.id),
-        eq(leagueMembershipsTable.userId, userId)
-      )
-    );
-
-  return { ...league, joined: !!membership };
-}
-
 router.get("/leagues", async (req, res): Promise<void> => {
-  const rows = await db
-    .select()
-    .from(leaguesTable)
-    .orderBy(desc(leaguesTable.createdAt));
+  const { data: leagues, error } = await supabaseAdmin
+    .from("leagues")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-  const formatted = await Promise.all(
-    rows.map((l) => formatLeague(l, req.userId))
-  );
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  const { data: memberships } = await supabaseAdmin
+    .from("league_memberships")
+    .select("league_id")
+    .eq("user_id", req.userId);
+
+  const joinedIds = new Set((memberships ?? []).map((m: { league_id: number }) => m.league_id));
+
+  const formatted = (leagues ?? []).map((l: Record<string, unknown>) => ({
+    ...mapLeague(l),
+    joined: joinedIds.has(l.id as number),
+  }));
 
   res.json(ListLeaguesResponse.parse(formatted));
 });
@@ -46,44 +41,57 @@ router.post("/leagues/:id/join", async (req, res): Promise<void> => {
     return;
   }
 
-  const [league] = await db
-    .select()
-    .from(leaguesTable)
-    .where(eq(leaguesTable.id, params.data.id));
+  const { data: league, error: leagueErr } = await supabaseAdmin
+    .from("leagues")
+    .select("*")
+    .eq("id", params.data.id)
+    .single();
 
-  if (!league) {
+  if (leagueErr || !league) {
     res.status(404).json({ error: "League not found" });
     return;
   }
 
-  const [existing] = await db
-    .select()
-    .from(leagueMembershipsTable)
-    .where(
-      and(
-        eq(leagueMembershipsTable.leagueId, params.data.id),
-        eq(leagueMembershipsTable.userId, req.userId)
-      )
-    );
+  const { data: existing } = await supabaseAdmin
+    .from("league_memberships")
+    .select("id")
+    .eq("league_id", params.data.id)
+    .eq("user_id", req.userId)
+    .maybeSingle();
 
   if (!existing) {
-    await db.insert(leagueMembershipsTable).values({
-      leagueId: params.data.id,
-      userId: req.userId,
+    await supabaseAdmin.from("league_memberships").insert({
+      league_id: params.data.id,
+      user_id: req.userId,
       status: "member",
     });
 
-    const [updated] = await db
-      .update(leaguesTable)
-      .set({ members: league.members + 1 })
-      .where(eq(leaguesTable.id, params.data.id))
-      .returning();
+    const { data: updated } = await supabaseAdmin
+      .from("leagues")
+      .update({ members: league.members + 1 })
+      .eq("id", params.data.id)
+      .select()
+      .single();
 
-    res.json(JoinLeagueResponse.parse(await formatLeague(updated, req.userId)));
+    res.json(JoinLeagueResponse.parse({ ...mapLeague(updated), joined: true }));
     return;
   }
 
-  res.json(JoinLeagueResponse.parse(await formatLeague(league, req.userId)));
+  res.json(JoinLeagueResponse.parse({ ...mapLeague(league), joined: true }));
 });
+
+function mapLeague(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    members: row.members,
+    type: row.type,
+    level: row.level,
+    avgScore: row.avg_score,
+    weeklyChallenge: row.weekly_challenge ?? null,
+    createdAt: row.created_at,
+  };
+}
 
 export default router;

@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and } from "drizzle-orm";
-import { db, momentsTable, momentLikesTable, usersTable } from "@workspace/db";
+import { supabaseAdmin } from "../lib/supabase";
 import {
   ListMomentsResponse,
   ListMomentsResponseItem,
@@ -14,35 +13,46 @@ import { timeAgo } from "../lib/timeAgo";
 
 const router: IRouter = Router();
 
-async function formatMoment(
-  moment: typeof momentsTable.$inferSelect,
-  userId: number
-) {
-  const [like] = await db
-    .select()
-    .from(momentLikesTable)
-    .where(
-      and(
-        eq(momentLikesTable.momentId, moment.id),
-        eq(momentLikesTable.userId, userId)
-      )
-    );
+async function formatMoment(row: Record<string, unknown>, userId: number) {
+  const { data: like } = await supabaseAdmin
+    .from("moment_likes")
+    .select("id")
+    .eq("moment_id", row.id)
+    .eq("user_id", userId)
+    .maybeSingle();
 
   return {
-    ...moment,
+    id: row.id,
+    userId: row.user_id,
+    username: row.username,
+    rank: row.rank,
+    rankColor: row.rank_color,
+    content: row.content,
+    score: row.score ?? null,
+    type: row.type,
+    likes: row.likes,
+    comments: row.comments,
+    initials: row.initials,
+    avatarColor: row.avatar_color,
+    createdAt: row.created_at,
     liked: !!like,
-    timeAgo: timeAgo(moment.createdAt),
+    timeAgo: timeAgo(new Date(row.created_at as string)),
   };
 }
 
 router.get("/moments", async (req, res): Promise<void> => {
-  const rows = await db
-    .select()
-    .from(momentsTable)
-    .orderBy(desc(momentsTable.createdAt));
+  const { data, error } = await supabaseAdmin
+    .from("moments")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
 
   const formatted = await Promise.all(
-    rows.map((m) => formatMoment(m, req.userId))
+    (data ?? []).map((m: Record<string, unknown>) => formatMoment(m, req.userId))
   );
 
   res.json(ListMomentsResponse.parse(formatted));
@@ -55,32 +65,39 @@ router.post("/moments", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, req.userId));
+  const { data: user, error: userErr } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("id", req.userId)
+    .single();
 
-  if (!user) {
+  if (userErr || !user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const [moment] = await db
-    .insert(momentsTable)
-    .values({
-      userId: req.userId,
+  const { data: moment, error: insertErr } = await supabaseAdmin
+    .from("moments")
+    .insert({
+      user_id: req.userId,
       username: user.username,
       rank: user.rank,
-      rankColor: rankColor(user.rank),
+      rank_color: rankColor(user.rank),
       content: parsed.data.content,
       score: parsed.data.score ?? null,
       type: parsed.data.type,
       likes: 0,
       comments: 0,
       initials: user.username.substring(0, 2),
-      avatarColor: "#1a3c2a",
+      avatar_color: "#1a3c2a",
     })
-    .returning();
+    .select()
+    .single();
+
+  if (insertErr || !moment) {
+    res.status(500).json({ error: insertErr?.message ?? "Insert failed" });
+    return;
+  }
 
   res.status(201).json(
     ListMomentsResponseItem.parse(await formatMoment(moment, req.userId))
@@ -94,37 +111,36 @@ router.post("/moments/:id/like", async (req, res): Promise<void> => {
     return;
   }
 
-  const [moment] = await db
-    .select()
-    .from(momentsTable)
-    .where(eq(momentsTable.id, params.data.id));
+  const { data: moment, error: fetchErr } = await supabaseAdmin
+    .from("moments")
+    .select("*")
+    .eq("id", params.data.id)
+    .single();
 
-  if (!moment) {
+  if (fetchErr || !moment) {
     res.status(404).json({ error: "Moment not found" });
     return;
   }
 
-  const [existingLike] = await db
-    .select()
-    .from(momentLikesTable)
-    .where(
-      and(
-        eq(momentLikesTable.momentId, params.data.id),
-        eq(momentLikesTable.userId, req.userId)
-      )
-    );
+  const { data: existingLike } = await supabaseAdmin
+    .from("moment_likes")
+    .select("id")
+    .eq("moment_id", params.data.id)
+    .eq("user_id", req.userId)
+    .maybeSingle();
 
   if (!existingLike) {
-    await db.insert(momentLikesTable).values({
-      momentId: params.data.id,
-      userId: req.userId,
+    await supabaseAdmin.from("moment_likes").insert({
+      moment_id: params.data.id,
+      user_id: req.userId,
     });
 
-    const [updated] = await db
-      .update(momentsTable)
-      .set({ likes: moment.likes + 1 })
-      .where(eq(momentsTable.id, params.data.id))
-      .returning();
+    const { data: updated } = await supabaseAdmin
+      .from("moments")
+      .update({ likes: moment.likes + 1 })
+      .eq("id", params.data.id)
+      .select()
+      .single();
 
     res.json(LikeMomentResponse.parse(await formatMoment(updated, req.userId)));
     return;
@@ -140,37 +156,34 @@ router.delete("/moments/:id/like", async (req, res): Promise<void> => {
     return;
   }
 
-  const [moment] = await db
-    .select()
-    .from(momentsTable)
-    .where(eq(momentsTable.id, params.data.id));
+  const { data: moment, error: fetchErr } = await supabaseAdmin
+    .from("moments")
+    .select("*")
+    .eq("id", params.data.id)
+    .single();
 
-  if (!moment) {
+  if (fetchErr || !moment) {
     res.status(404).json({ error: "Moment not found" });
     return;
   }
 
-  const deleted = await db
-    .delete(momentLikesTable)
-    .where(
-      and(
-        eq(momentLikesTable.momentId, params.data.id),
-        eq(momentLikesTable.userId, req.userId)
-      )
-    )
-    .returning();
+  const { data: deleted } = await supabaseAdmin
+    .from("moment_likes")
+    .delete()
+    .eq("moment_id", params.data.id)
+    .eq("user_id", req.userId)
+    .select();
 
-  if (deleted.length > 0) {
+  if (deleted && deleted.length > 0) {
     const newLikes = Math.max(0, moment.likes - 1);
-    const [updated] = await db
-      .update(momentsTable)
-      .set({ likes: newLikes })
-      .where(eq(momentsTable.id, params.data.id))
-      .returning();
+    const { data: updated } = await supabaseAdmin
+      .from("moments")
+      .update({ likes: newLikes })
+      .eq("id", params.data.id)
+      .select()
+      .single();
 
-    res.json(
-      UnlikeMomentResponse.parse(await formatMoment(updated, req.userId))
-    );
+    res.json(UnlikeMomentResponse.parse(await formatMoment(updated, req.userId)));
     return;
   }
 

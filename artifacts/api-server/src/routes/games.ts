@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
-import { db, gamesTable, usersTable } from "@workspace/db";
+import { supabaseAdmin } from "../lib/supabase";
 import {
   ListGamesResponse,
   ListGamesResponseItem,
@@ -10,13 +9,18 @@ import {
 const router: IRouter = Router();
 
 router.get("/games", async (req, res): Promise<void> => {
-  const games = await db
-    .select()
-    .from(gamesTable)
-    .where(eq(gamesTable.userId, req.userId))
-    .orderBy(desc(gamesTable.createdAt));
+  const { data, error } = await supabaseAdmin
+    .from("games")
+    .select("*")
+    .eq("user_id", req.userId)
+    .order("created_at", { ascending: false });
 
-  res.json(ListGamesResponse.parse(games));
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json(ListGamesResponse.parse((data ?? []).map(mapGame)));
 });
 
 router.post("/games", async (req, res): Promise<void> => {
@@ -26,52 +30,73 @@ router.post("/games", async (req, res): Promise<void> => {
     return;
   }
 
-  const [game] = await db
-    .insert(gamesTable)
-    .values({
-      userId: req.userId,
+  const { data: game, error: insertErr } = await supabaseAdmin
+    .from("games")
+    .insert({
+      user_id: req.userId,
       score: parsed.data.score,
       date: parsed.data.date,
-      alley: parsed.data.alley,
-      oilPattern: parsed.data.oilPattern,
-      ballUsed: parsed.data.ballUsed,
+      alley: parsed.data.alley ?? "",
+      oil_pattern: parsed.data.oilPattern ?? "House Shot",
+      ball_used: parsed.data.ballUsed ?? "",
       notes: parsed.data.notes ?? "",
       verified: parsed.data.verified ?? false,
     })
-    .returning();
-
-  const allGames = await db
     .select()
-    .from(gamesTable)
-    .where(eq(gamesTable.userId, req.userId));
+    .single();
 
-  const totalScores = allGames.reduce((sum, g) => sum + g.score, 0);
-  const newAvg = Math.round(totalScores / allGames.length);
-
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, req.userId));
-
-  if (user) {
-    const newHighGame = Math.max(user.highGame, game.score);
-    const xpGained = Math.floor(game.score / 10);
-    const newXp = user.xp + xpGained;
-    const leveledUp = newXp >= user.xpToNext;
-
-    await db
-      .update(usersTable)
-      .set({
-        careerAvg: newAvg,
-        highGame: newHighGame,
-        totalGames: user.totalGames + 1,
-        xp: leveledUp ? newXp - user.xpToNext : newXp,
-        level: leveledUp ? user.level + 1 : user.level,
-      })
-      .where(eq(usersTable.id, req.userId));
+  if (insertErr || !game) {
+    res.status(500).json({ error: insertErr?.message ?? "Insert failed" });
+    return;
   }
 
-  res.status(201).json(ListGamesResponseItem.parse(game));
+  const { data: allGames } = await supabaseAdmin
+    .from("games")
+    .select("score")
+    .eq("user_id", req.userId);
+
+  const { data: user } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("id", req.userId)
+    .single();
+
+  if (user && allGames) {
+    const totalScores = allGames.reduce((sum: number, g: { score: number }) => sum + g.score, 0);
+    const newAvg = Math.round(totalScores / allGames.length);
+    const newHighGame = Math.max(user.high_game, game.score);
+    const xpGained = Math.floor(game.score / 10);
+    const newXp = user.xp + xpGained;
+    const leveledUp = newXp >= user.xp_to_next;
+
+    await supabaseAdmin
+      .from("users")
+      .update({
+        career_avg: newAvg,
+        high_game: newHighGame,
+        total_games: user.total_games + 1,
+        xp: leveledUp ? newXp - user.xp_to_next : newXp,
+        level: leveledUp ? user.level + 1 : user.level,
+      })
+      .eq("id", req.userId);
+  }
+
+  res.status(201).json(ListGamesResponseItem.parse(mapGame(game)));
 });
+
+function mapGame(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    score: row.score,
+    date: row.date,
+    alley: row.alley,
+    oilPattern: row.oil_pattern,
+    ballUsed: row.ball_used,
+    notes: row.notes,
+    verified: row.verified,
+    createdAt: row.created_at,
+  };
+}
 
 export default router;

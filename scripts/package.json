@@ -7,6 +7,7 @@
     "hello": "tsx ./src/hello.ts",
     "seed:revenuecat": "tsx ./src/seedRevenueCat.ts",
     "seed:league": "tsx ./src/seedLeague.ts",
+    "seed:supabase": "tsx ./src/seedSupabase.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "@replit/revenuecat-sdk": "4.0.0",
+    "@supabase/supabase-js": "^2.105.1",
     "@workspace/db": "workspace:*",
     "drizzle-orm": "catalog:"
   }

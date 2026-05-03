@@ -1,7 +1,7 @@
 # League — Premium Bowling App
 
 ## Overview
-A premium mobile bowling app built with Expo (React Native) backed by a real Express + PostgreSQL API. Features skill-based money challenges, a social Moments feed, score tracking with AI verification, league discovery, and a RevenueCat Pro subscription.
+A premium mobile bowling app built with Expo (React Native) backed by a real Express 5 API + Supabase (PostgreSQL + Auth + Realtime + RLS). Features skill-based money challenges, a social Moments feed, score tracking, league discovery, and a RevenueCat Pro subscription.
 
 ## Design System
 - **Background**: `#f0f0e8` (warm off-white)
@@ -14,17 +14,21 @@ A premium mobile bowling app built with Expo (React Native) backed by a real Exp
 
 ## Architecture
 - **Mobile**: Expo SDK 54, expo-router v6 (file-based routing)
-- **Backend**: Express 5 + Drizzle ORM + PostgreSQL (artifacts/api-server)
-- **API contract**: OpenAPI-first with Orval codegen (lib/api-spec)
+- **Backend**: Express 5 API server — all DB access via `supabaseAdmin` REST client (no direct PG connection; Replit network blocks Supabase pooler)
+- **Database**: Supabase PostgreSQL (`wtgphatzheodjsqznedg`) with RLS enabled on all tables
+- **Auth**: Supabase Auth (email/password) — JWT Bearer tokens verified by `supabaseAuthMiddleware`
+- **Realtime**: Supabase Realtime on `moments` and `challenges` tables
 - **Subscriptions**: RevenueCat (`react-native-purchases`)
 - **Tabs**: NativeTabs (iOS 26 liquid glass) + ClassicTabs fallback
-- **Auth**: Demo user (id=1) — no login required; demoUserMiddleware sets req.userId = 1
 
 ## App Structure
 ```
 artifacts/league/
   app/
-    _layout.tsx          ← Root layout (fonts, providers, RevenueCat init)
+    _layout.tsx          ← Root layout: AuthProvider + AuthGate + SubscriptionProvider
+    auth/
+      sign-in.tsx        ← Supabase email/password sign-in
+      sign-up.tsx        ← Supabase sign-up with bowler tag
     (tabs)/
       _layout.tsx        ← 5-tab navigation
       index.tsx          ← Challenges feed
@@ -36,42 +40,44 @@ artifacts/league/
     ChallengeCard.tsx    ← Challenge feed card
     RankBadge.tsx        ← Rank display pill
     StakeModal.tsx       ← Stake selector
+    ErrorBoundary.tsx    ← Error boundary wrapper
   context/
-    AppContext.tsx        ← App-wide state — fetches from real API on mount
+    AuthContext.tsx       ← Supabase session state (signIn, signUp, signOut)
+    AppContext.tsx        ← App-wide state + Supabase Realtime for moments
   lib/
-    api.ts               ← Lightweight fetch wrapper (api.get/post/patch/delete)
+    api.ts               ← Fetch wrapper — injects Supabase Bearer token on every request
+    supabase.ts          ← Supabase client (AsyncStorage session persistence)
     revenuecat.tsx       ← RevenueCat integration (SubscriptionProvider, useSubscription)
 
 artifacts/api-server/
   src/
-    app.ts               ← Express app (pinoHttp, cors, demoUserMiddleware)
+    app.ts               ← Express app (pinoHttp, cors, supabaseAuthMiddleware on /api)
     routes/
-      health.ts          ← GET /healthz
+      health.ts          ← GET /healthz (skips auth)
       users.ts           ← GET/PATCH /users/me
       games.ts           ← GET/POST /games
       challenges.ts      ← GET /challenges, GET /challenges/my, POST /challenges, POST /challenges/:id/accept
       moments.ts         ← GET/POST /moments, POST/DELETE /moments/:id/like
       leagues.ts         ← GET /leagues, POST /leagues/:id/join
     middlewares/
-      demoUser.ts        ← Sets req.userId = 1, auto-creates demo user if missing
+      supabaseAuth.ts    ← Verifies JWT, auto-creates user row on first login
     lib/
+      supabase.ts        ← supabaseAdmin client (service role key)
       logger.ts          ← pino logger
       timeAgo.ts         ← Relative time helper
 
 lib/api-spec/openapi.yaml   ← Single source of truth for all API contracts
 lib/api-zod/                ← Generated Zod validators (from codegen)
-lib/api-client-react/       ← Generated React Query hooks (from codegen)
-lib/db/src/schema/          ← Drizzle table definitions
-  users.ts, games.ts, challenges.ts, moments.ts, leagues.ts
+lib/db/src/schema/          ← Drizzle table definitions (kept for reference / future migrations)
 
 scripts/src/
-  seedLeague.ts        ← Seeds demo user, NPC users, challenges, moments, leagues
+  seedSupabase.ts      ← Seeds NPC users, challenges, moments, leagues into Supabase
   seedRevenueCat.ts    ← Seeds RC entities
 ```
 
 ## Backend API Endpoints
-All routes are under `/api`:
-- `GET /healthz` — health check
+All routes are under `/api` and require `Authorization: Bearer <supabase_jwt>`:
+- `GET /healthz` — health check (no auth required)
 - `GET /users/me` — current user profile
 - `PATCH /users/me` — update profile / isPro flag
 - `GET /games` — list user's games (newest first)
@@ -85,19 +91,24 @@ All routes are under `/api`:
 - `POST /moments/:id/like` — like a moment
 - `DELETE /moments/:id/like` — unlike a moment
 - `GET /leagues` — all leagues with joined status
-- `POST /leagues/:id/join` — join (or request to join) a league
+- `POST /leagues/:id/join` — join a league
 
 ## Database Commands
 ```bash
-# Push schema changes to DB
-pnpm --filter @workspace/db run push
-
-# Re-seed the database
-pnpm --filter @workspace/scripts run seed:league
+# Re-seed Supabase with NPC data
+pnpm --filter @workspace/scripts run seed:supabase
 
 # Regenerate Zod validators + React Query hooks after spec changes
 pnpm --filter @workspace/api-spec run codegen
 ```
+
+## Supabase Setup
+- **Project ref**: `wtgphatzheodjsqznedg`
+- **URL**: `https://wtgphatzheodjsqznedg.supabase.co`
+- **Tables**: `users`, `games`, `challenges`, `moments`, `moment_likes`, `leagues`, `league_memberships`
+- **RLS**: Enabled on all tables. Service role bypasses all policies. Authenticated users have scoped access.
+- **Realtime**: `moments` and `challenges` tables added to `supabase_realtime` publication
+- **Note**: Direct PostgreSQL connections are blocked by Replit's network. All DB access goes through the Supabase REST API via `@supabase/supabase-js`.
 
 ## RevenueCat Setup
 - **Project**: League (`proj0ba05017`)
@@ -108,7 +119,12 @@ pnpm --filter @workspace/api-spec run codegen
 - Run seed: `pnpm --filter @workspace/scripts run seed:revenuecat`
 
 ## Environment Variables
-- `DATABASE_URL` — PostgreSQL connection string (auto-provisioned)
+- `SUPABASE_URL` — Supabase project URL
+- `SUPABASE_ANON_KEY` — Supabase anon key (server)
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (server, bypasses RLS)
+- `SUPABASE_ACCESS_TOKEN` — Supabase personal access token (for Management API / migrations)
+- `EXPO_PUBLIC_SUPABASE_URL` — Supabase URL for Expo client
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key for Expo client
 - `SESSION_SECRET` — session secret
 - `EXPO_PUBLIC_REVENUECAT_TEST_API_KEY`
 - `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`
@@ -119,8 +135,9 @@ pnpm --filter @workspace/api-spec run codegen
 Rookie → Amateur → Intermediate → Advanced → Expert → Elite → Diamond IV–I → Platinum II–I → Legend → Kingpin
 
 ## Key Features
-1. **Challenges**: Post/accept skill-based money matches with stake selection
-2. **Moments**: Social feed with like/comment, type filters (games, challenges, advice)
-3. **Score Log**: Log games with oil pattern, ball, alley. AI verification animation
-4. **Leagues**: Discover public/private leagues by skill level. Join/request flow
-5. **Profile**: XP bar, career stats, rank display, team card, Pro upgrade paywall
+1. **Auth**: Supabase email/password sign-up/sign-in. JWT auto-injected into every API request.
+2. **Challenges**: Post/accept skill-based money matches with stake selection
+3. **Moments**: Social feed with live Realtime updates, like/comment, type filters
+4. **Score Log**: Log games with oil pattern, ball, alley. AI verification animation
+5. **Leagues**: Discover public/private leagues by skill level. Join/request flow
+6. **Profile**: XP bar, career stats, rank display, team card, Pro upgrade paywall

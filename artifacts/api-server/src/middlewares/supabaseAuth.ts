@@ -1,14 +1,17 @@
 import { type Request, type Response, type NextFunction } from "express";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { logger } from "../lib/logger";
 import { supabaseAdmin } from "../lib/supabase";
+import { logger } from "../lib/logger";
 
 export async function supabaseAuthMiddleware(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  if (req.path === "/healthz") {
+    next();
+    return;
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Missing authorization header" });
@@ -26,40 +29,58 @@ export async function supabaseAuthMiddleware(
   const authId = data.user.id;
 
   try {
-    let [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.authId, authId));
+    const { data: user, error: userErr } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("auth_id", authId)
+      .maybeSingle();
 
-    if (!user) {
-      const email = data.user.email ?? "";
-      const username = email.split("@")[0].toUpperCase().replace(/[^A-Z0-9_]/g, "_").slice(0, 16);
-      const name = data.user.user_metadata?.full_name ?? username;
+    if (userErr) throw userErr;
 
-      [user] = await db
-        .insert(usersTable)
-        .values({
-          authId,
-          username,
-          name,
-          rank: "Rookie",
-          level: 1,
-          xp: 0,
-          xpToNext: 1000,
-          isPro: false,
-          careerAvg: 0,
-          highGame: 0,
-          totalGames: 0,
-          team: "Solo",
-          rating: 1000,
-        })
-        .returning();
-
-      logger.info({ authId, username }, "Created new user from Supabase auth");
+    if (user) {
+      req.authId = authId;
+      req.userId = user.id as number;
+      next();
+      return;
     }
 
+    const email = data.user.email ?? "";
+    const username = email
+      .split("@")[0]
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, "_")
+      .slice(0, 16);
+    const name = (data.user.user_metadata?.full_name as string | undefined) ?? username;
+
+    const { data: newUser, error: insertErr } = await supabaseAdmin
+      .from("users")
+      .insert({
+        auth_id: authId,
+        username,
+        name,
+        rank: "Rookie",
+        level: 1,
+        xp: 0,
+        xp_to_next: 1000,
+        is_pro: false,
+        career_avg: 0,
+        high_game: 0,
+        total_games: 0,
+        team: "Solo",
+        rating: 1000,
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !newUser) {
+      logger.error({ insertErr }, "Failed to create user");
+      res.status(500).json({ error: "Failed to create user" });
+      return;
+    }
+
+    logger.info({ authId, username }, "Created new user from Supabase auth");
     req.authId = authId;
-    req.userId = user.id;
+    req.userId = newUser.id as number;
     next();
   } catch (err) {
     logger.error({ err }, "Error in supabaseAuthMiddleware");

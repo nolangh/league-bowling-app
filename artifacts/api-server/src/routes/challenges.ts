@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ne, desc } from "drizzle-orm";
-import { db, challengesTable, usersTable } from "@workspace/db";
+import { supabaseAdmin } from "../lib/supabase";
 import {
   ListChallengesResponse,
   ListChallengesResponseItem,
@@ -13,29 +12,54 @@ import { timeAgo } from "../lib/timeAgo";
 
 const router: IRouter = Router();
 
-function withTimeAgo<T extends { createdAt: Date }>(row: T) {
-  return { ...row, timeAgo: timeAgo(row.createdAt) };
+function mapChallenge(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    username: row.username,
+    rank: row.rank,
+    rankColor: row.rank_color,
+    postedScore: row.posted_score,
+    stake: row.stake,
+    status: row.status,
+    initials: row.initials,
+    avatarColor: row.avatar_color,
+    isPro: row.is_pro,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    timeAgo: timeAgo(new Date(row.created_at as string)),
+  };
 }
 
 router.get("/challenges", async (req, res): Promise<void> => {
-  const rows = await db
-    .select()
-    .from(challengesTable)
-    .where(ne(challengesTable.userId, req.userId))
-    .orderBy(desc(challengesTable.createdAt));
+  const { data, error } = await supabaseAdmin
+    .from("challenges")
+    .select("*")
+    .neq("user_id", req.userId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false });
 
-  const open = rows.filter((r) => r.status === "open");
-  res.json(ListChallengesResponse.parse(open.map(withTimeAgo)));
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json(ListChallengesResponse.parse((data ?? []).map(mapChallenge)));
 });
 
 router.get("/challenges/my", async (req, res): Promise<void> => {
-  const rows = await db
-    .select()
-    .from(challengesTable)
-    .where(eq(challengesTable.userId, req.userId))
-    .orderBy(desc(challengesTable.createdAt));
+  const { data, error } = await supabaseAdmin
+    .from("challenges")
+    .select("*")
+    .eq("user_id", req.userId)
+    .order("created_at", { ascending: false });
 
-  res.json(ListMyChallengesResponse.parse(rows.map(withTimeAgo)));
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json(ListMyChallengesResponse.parse((data ?? []).map(mapChallenge)));
 });
 
 router.post("/challenges", async (req, res): Promise<void> => {
@@ -45,33 +69,40 @@ router.post("/challenges", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, req.userId));
+  const { data: user, error: userErr } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("id", req.userId)
+    .single();
 
-  if (!user) {
+  if (userErr || !user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const [challenge] = await db
-    .insert(challengesTable)
-    .values({
-      userId: req.userId,
+  const { data: challenge, error: insertErr } = await supabaseAdmin
+    .from("challenges")
+    .insert({
+      user_id: req.userId,
       username: user.username,
       rank: user.rank,
-      rankColor: rankColor(user.rank),
-      postedScore: parsed.data.postedScore,
+      rank_color: rankColor(user.rank),
+      posted_score: parsed.data.postedScore,
       stake: parsed.data.stake,
       status: "open",
       initials: user.username.substring(0, 2),
-      avatarColor: "#1a3c2a",
-      isPro: user.isPro,
+      avatar_color: "#1a3c2a",
+      is_pro: user.is_pro,
     })
-    .returning();
+    .select()
+    .single();
 
-  res.status(201).json(ListChallengesResponseItem.parse(withTimeAgo(challenge)));
+  if (insertErr || !challenge) {
+    res.status(500).json({ error: insertErr?.message ?? "Insert failed" });
+    return;
+  }
+
+  res.status(201).json(ListChallengesResponseItem.parse(mapChallenge(challenge)));
 });
 
 router.post("/challenges/:id/accept", async (req, res): Promise<void> => {
@@ -81,23 +112,30 @@ router.post("/challenges/:id/accept", async (req, res): Promise<void> => {
     return;
   }
 
-  const [challenge] = await db
-    .select()
-    .from(challengesTable)
-    .where(eq(challengesTable.id, params.data.id));
+  const { data: challenge, error: fetchErr } = await supabaseAdmin
+    .from("challenges")
+    .select("*")
+    .eq("id", params.data.id)
+    .single();
 
-  if (!challenge) {
+  if (fetchErr || !challenge) {
     res.status(404).json({ error: "Challenge not found" });
     return;
   }
 
-  const [updated] = await db
-    .update(challengesTable)
-    .set({ status: "active" })
-    .where(eq(challengesTable.id, params.data.id))
-    .returning();
+  const { data: updated, error: updateErr } = await supabaseAdmin
+    .from("challenges")
+    .update({ status: "active" })
+    .eq("id", params.data.id)
+    .select()
+    .single();
 
-  res.json(AcceptChallengeResponse.parse(withTimeAgo(updated)));
+  if (updateErr || !updated) {
+    res.status(500).json({ error: updateErr?.message ?? "Update failed" });
+    return;
+  }
+
+  res.json(AcceptChallengeResponse.parse(mapChallenge(updated)));
 });
 
 function rankColor(rank: string): string {
