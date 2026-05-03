@@ -9,16 +9,28 @@ import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
-// IMPORTANT: iOS 26 uses NativeTabs for native tabs with liquid glass support.
-// NativeTabs intentionally does NOT use custom design tokens — liquid glass
-// is a system-level appearance provided by iOS and cannot be overridden.
-// Custom brand colors are applied only on the ClassicTabLayout path (older iOS / Android / web).
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Home</Label>
+        <Icon sf={{ default: "bolt", selected: "bolt.fill" }} />
+        <Label>Challenges</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="moments">
+        <Icon sf={{ default: "play.square", selected: "play.square.fill" }} />
+        <Label>Moments</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="log">
+        <Icon sf={{ default: "plus.square", selected: "plus.square.fill" }} />
+        <Label>Log</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="leagues">
+        <Icon sf={{ default: "trophy", selected: "trophy.fill" }} />
+        <Label>Leagues</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person", selected: "person.fill" }} />
+        <Label>Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -34,9 +46,9 @@ function ClassicTabLayout() {
   return (
     <Tabs
       screenOptions={{
+        headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
-        headerShown: true,
         tabBarStyle: {
           position: "absolute",
           backgroundColor: isIOS ? "transparent" : colors.background,
@@ -53,24 +65,67 @@ function ClassicTabLayout() {
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: "Challenges",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
+              <SymbolView name="bolt" tintColor={color} size={24} />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <Feather name="zap" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="moments"
+        options={{
+          title: "Moments",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="play.square" tintColor={color} size={24} />
+            ) : (
+              <Feather name="play-circle" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="log"
+        options={{
+          title: "Log",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="plus.square" tintColor={color} size={24} />
+            ) : (
+              <Feather name="plus-square" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="leagues"
+        options={{
+          title: "Leagues",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="trophy" tintColor={color} size={24} />
+            ) : (
+              <Feather name="award" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="person" tintColor={color} size={24} />
+            ) : (
+              <Feather name="user" size={22} color={color} />
             ),
         }}
       />

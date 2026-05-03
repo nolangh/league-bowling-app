@@ -1,0 +1,362 @@
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  Platform,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+
+import { useColors } from "@/hooks/useColors";
+import { useApp, getRankColor } from "@/context/AppContext";
+import { RankBadge } from "@/components/RankBadge";
+import { useSubscription } from "@/lib/revenuecat";
+
+export default function ProfileScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { user, games, setUserPro } = useApp();
+  const { isSubscribed, offerings, purchase, isPurchasing, restore, isRestoring, isConfigured } = useSubscription();
+  const [proModalVisible, setProModalVisible] = useState(false);
+  const [purchaseConfirmVisible, setPurchaseConfirmVisible] = useState(false);
+
+  const rankColor = getRankColor(user.rank);
+  const xpPct = user.xp / user.xpToNext;
+
+  const currentOffering = offerings?.current;
+  const packageToPurchase = currentOffering?.availablePackages[0];
+  const priceString = packageToPurchase?.product?.priceString ?? "$4.99";
+
+  const handleUpgrade = () => {
+    if (!isConfigured) {
+      setUserPro(true);
+      setProModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+    setPurchaseConfirmVisible(true);
+  };
+
+  const confirmPurchase = async () => {
+    if (!packageToPurchase) return;
+    setPurchaseConfirmVisible(false);
+    try {
+      await purchase(packageToPurchase);
+      setUserPro(true);
+      setProModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      if (e?.code !== "1") {
+        // Non-cancel error
+      }
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      await restore();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+  };
+
+  const STATS = [
+    { label: "CAREER AVG", value: user.careerAvg },
+    { label: "HIGH GAME", value: user.highGame },
+    { label: "TOTAL GAMES", value: user.totalGames },
+    { label: "RATING", value: user.rating },
+  ];
+
+  const PRO_FEATURES = [
+    { icon: "zap" as const, text: "Unlimited money challenges" },
+    { icon: "shield" as const, text: "AI score verification" },
+    { icon: "bar-chart-2" as const, text: "Advanced analytics" },
+    { icon: "users" as const, text: "Private league creation" },
+    { icon: "star" as const, text: "Pro badge on your profile" },
+    { icon: "trending-up" as const, text: "Priority skill matching" },
+  ];
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Hero */}
+        <View style={[styles.heroSection, { paddingTop: insets.top + 20 }]}>
+          <View style={[styles.avatarLarge, { backgroundColor: "#1a3c2a" }]}>
+            <Text style={styles.avatarLargeText}>
+              {user.name.split(" ").map((n) => n[0]).join("")}
+            </Text>
+          </View>
+          <View style={styles.heroInfo}>
+            <View style={styles.nameRow}>
+              <Text style={[styles.displayName, { color: colors.foreground }]}>{user.name}</Text>
+              {(isSubscribed || user.isPro) && (
+                <View style={[styles.proBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.proBadgeText, { color: colors.primaryForeground }]}>PRO</Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.username, { color: colors.mutedForeground }]}>@{user.username}</Text>
+            <RankBadge rank={user.rank} />
+          </View>
+          {!(isSubscribed || user.isPro) && (
+            <TouchableOpacity
+              style={[styles.upgradeBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setProModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Feather name="star" size={14} color={colors.primaryForeground} />
+              <Text style={[styles.upgradeBtnText, { color: colors.primaryForeground }]}>Go Pro</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* XP Bar */}
+        <View style={[styles.xpSection, { backgroundColor: colors.card }]}>
+          <View style={styles.xpHeader}>
+            <Text style={[styles.xpLabel, { color: colors.mutedForeground }]}>
+              LEVEL {user.level}
+            </Text>
+            <Text style={[styles.xpCount, { color: colors.foreground }]}>
+              {user.xp.toLocaleString()} / {user.xpToNext.toLocaleString()} XP
+            </Text>
+          </View>
+          <View style={[styles.xpBar, { backgroundColor: colors.secondary }]}>
+            <View
+              style={[styles.xpFill, { width: `${xpPct * 100}%` as any, backgroundColor: colors.primary }]}
+            />
+          </View>
+        </View>
+
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          {STATS.map((s) => (
+            <View key={s.label} style={[styles.statCard, { backgroundColor: colors.card }]}>
+              <Text style={[styles.statValue, { color: colors.foreground }]}>{s.value}</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Team */}
+        <View style={[styles.teamCard, { backgroundColor: colors.darkCard }]}>
+          <Feather name="shield" size={18} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.teamLabel, { color: colors.primary }]}>TEAM</Text>
+            <Text style={[styles.teamName, { color: "#ffffff" }]}>{user.team}</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </View>
+
+        {/* Recent Games Preview */}
+        <View style={styles.recentSection}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>RECENT GAMES</Text>
+          {games.slice(0, 3).map((g) => (
+            <View key={g.id} style={[styles.gameRow, { backgroundColor: colors.card }]}>
+              <View style={[styles.gameScoreBox, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.gameScore, { color: colors.primaryForeground }]}>{g.score}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.gameAlley, { color: colors.foreground }]}>{g.alley}</Text>
+                <Text style={[styles.gameMeta, { color: colors.mutedForeground }]}>{g.date} · {g.oilPattern}</Text>
+              </View>
+              {g.verified && (
+                <Feather name="check-circle" size={16} color={colors.primary} />
+              )}
+            </View>
+          ))}
+        </View>
+
+        {/* Settings */}
+        <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
+          {[
+            { icon: "bell" as const, label: "Notifications" },
+            { icon: "shield" as const, label: "Privacy" },
+            { icon: "help-circle" as const, label: "Help & Support" },
+          ].map((item, i, arr) => (
+            <TouchableOpacity key={item.label} style={[styles.settingsRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]} activeOpacity={0.7}>
+              <Feather name={item.icon} size={18} color={colors.mutedForeground} />
+              <Text style={[styles.settingsLabel, { color: colors.foreground }]}>{item.label}</Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Pro Upgrade Modal */}
+      <Modal visible={proModalVisible} transparent animationType="slide">
+        <Pressable style={styles.overlay} onPress={() => setProModalVisible(false)}>
+          <Pressable style={[styles.bottomSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View style={[styles.proHeader, { backgroundColor: colors.darkCard }]}>
+              <View style={[styles.proIconBig, { backgroundColor: colors.primary }]}>
+                <Feather name="star" size={28} color={colors.primaryForeground} />
+              </View>
+              <Text style={[styles.proTitle, { color: "#ffffff" }]}>League Pro</Text>
+              <Text style={[styles.proPrice, { color: colors.primary }]}>
+                {priceString}<Text style={styles.proFreq}>/month</Text>
+              </Text>
+            </View>
+            <View style={styles.featureList}>
+              {PRO_FEATURES.map((f) => (
+                <View key={f.text} style={styles.featureRow}>
+                  <View style={[styles.featureIconBox, { backgroundColor: colors.primary + "22" }]}>
+                    <Feather name={f.icon} size={14} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.featureText, { color: colors.foreground }]}>{f.text}</Text>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={[styles.proBtn, { backgroundColor: colors.primary }]}
+              onPress={handleUpgrade}
+              disabled={isPurchasing}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.proBtnText, { color: colors.primaryForeground }]}>
+                {isPurchasing ? "Processing..." : `Start Pro — ${priceString}/mo`}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn} disabled={isRestoring}>
+              <Text style={[styles.restoreText, { color: colors.mutedForeground }]}>
+                {isRestoring ? "Restoring..." : "Restore Purchases"}
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Purchase Confirmation Modal */}
+      <Modal visible={purchaseConfirmVisible} transparent animationType="fade">
+        <Pressable style={styles.overlay} onPress={() => setPurchaseConfirmVisible(false)}>
+          <Pressable style={[styles.confirmCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.confirmTitle, { color: colors.foreground }]}>Confirm Purchase</Text>
+            <Text style={[styles.confirmText, { color: colors.mutedForeground }]}>
+              Subscribe to League Pro for {priceString}/month?
+            </Text>
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity
+                style={[styles.confirmCancelBtn, { backgroundColor: colors.secondary }]}
+                onPress={() => setPurchaseConfirmVisible(false)}
+              >
+                <Text style={[styles.confirmCancelText, { color: colors.foreground }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmOkBtn, { backgroundColor: colors.primary }]}
+                onPress={confirmPurchase}
+              >
+                <Text style={[styles.confirmOkText, { color: colors.primaryForeground }]}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  content: { gap: 12, paddingHorizontal: 16 },
+  heroSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingBottom: 4,
+  },
+  avatarLarge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarLargeText: { color: "#ffffff", fontSize: 22, fontWeight: "800" },
+  heroInfo: { flex: 1, gap: 4 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  displayName: { fontSize: 18, fontWeight: "800" },
+  proBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 50 },
+  proBadgeText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  username: { fontSize: 13, fontWeight: "500" },
+  upgradeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 50,
+  },
+  upgradeBtnText: { fontSize: 13, fontWeight: "700" },
+  xpSection: { borderRadius: 16, padding: 14, gap: 10 },
+  xpHeader: { flexDirection: "row", justifyContent: "space-between" },
+  xpLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  xpCount: { fontSize: 12, fontWeight: "600" },
+  xpBar: { height: 8, borderRadius: 4, overflow: "hidden" },
+  xpFill: { height: "100%", borderRadius: 4 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statCard: {
+    width: "47%",
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+    gap: 4,
+  },
+  statValue: { fontSize: 26, fontWeight: "800" },
+  statLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
+  teamCard: {
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  teamLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
+  teamName: { fontSize: 16, fontWeight: "700" },
+  recentSection: { gap: 8 },
+  sectionTitle: { fontSize: 11, fontWeight: "700", letterSpacing: 1 },
+  gameRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 12 },
+  gameScoreBox: { width: 46, height: 46, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  gameScore: { fontSize: 18, fontWeight: "800" },
+  gameAlley: { fontSize: 13, fontWeight: "700" },
+  gameMeta: { fontSize: 11, marginTop: 2 },
+  settingsCard: { borderRadius: 16, overflow: "hidden", marginBottom: 8 },
+  settingsRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
+  settingsLabel: { flex: 1, fontSize: 15, fontWeight: "500" },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  bottomSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+    overflow: "hidden",
+    gap: 0,
+  },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  proHeader: { alignItems: "center", padding: 28, gap: 10 },
+  proIconBig: { width: 64, height: 64, borderRadius: 32, justifyContent: "center", alignItems: "center" },
+  proTitle: { fontSize: 24, fontWeight: "800" },
+  proPrice: { fontSize: 32, fontWeight: "800" },
+  proFreq: { fontSize: 16, fontWeight: "400" },
+  featureList: { padding: 20, gap: 12 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  featureIconBox: { width: 32, height: 32, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  featureText: { fontSize: 15, fontWeight: "500" },
+  proBtn: { marginHorizontal: 20, borderRadius: 50, paddingVertical: 16, alignItems: "center" },
+  proBtnText: { fontSize: 15, fontWeight: "800" },
+  restoreBtn: { alignItems: "center", paddingVertical: 14 },
+  restoreText: { fontSize: 13, fontWeight: "500" },
+  confirmCard: { margin: 32, borderRadius: 24, padding: 24, gap: 12, alignItems: "center" },
+  confirmTitle: { fontSize: 18, fontWeight: "800" },
+  confirmText: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  confirmBtns: { flexDirection: "row", gap: 12, width: "100%", marginTop: 8 },
+  confirmCancelBtn: { flex: 1, borderRadius: 50, paddingVertical: 14, alignItems: "center" },
+  confirmCancelText: { fontSize: 14, fontWeight: "700" },
+  confirmOkBtn: { flex: 1, borderRadius: 50, paddingVertical: 14, alignItems: "center" },
+  confirmOkText: { fontSize: 14, fontWeight: "700" },
+});
