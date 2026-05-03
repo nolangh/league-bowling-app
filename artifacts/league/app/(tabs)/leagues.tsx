@@ -94,7 +94,7 @@ function LeagueCard({ league, onJoin }: { league: League; onJoin: () => void }) 
 export default function LeaguesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { leagues } = useApp();
+  const { leagues, joinLeague } = useApp();
   const [filter, setFilter] = useState<"all" | "public" | "private">("all");
   const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
@@ -103,6 +103,7 @@ export default function LeaguesScreen() {
     filter === "all" ? leagues : leagues.filter((l) => l.type === filter);
 
   const handleJoin = (league: League) => {
+    joinLeague(league.id);
     setJoinedLeague(league);
     setSuccessVisible(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

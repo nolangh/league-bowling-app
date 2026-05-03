@@ -3,13 +3,24 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: League bowling app API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User profile operations
+  - name: games
+    description: Game logging operations
+  - name: challenges
+    description: Money challenge operations
+  - name: moments
+    description: Social feed operations
+  - name: leagues
+    description: League operations
+
 paths:
   /healthz:
     get:
@@ -24,6 +35,279 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /games:
+    get:
+      operationId: listGames
+      tags: [games]
+      summary: List current user's logged games
+      responses:
+        "200":
+          description: List of games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+    post:
+      operationId: createGame
+      tags: [games]
+      summary: Log a new game
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGameBody"
+      responses:
+        "201":
+          description: Created game
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /challenges:
+    get:
+      operationId: listChallenges
+      tags: [challenges]
+      summary: List open challenges from other players
+      responses:
+        "200":
+          description: Open challenges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Challenge"
+    post:
+      operationId: createChallenge
+      tags: [challenges]
+      summary: Post a new challenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChallengeBody"
+      responses:
+        "201":
+          description: Created challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Challenge"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /challenges/my:
+    get:
+      operationId: listMyChallenges
+      tags: [challenges]
+      summary: List current user's active challenges
+      responses:
+        "200":
+          description: My challenges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Challenge"
+
+  /challenges/{id}/accept:
+    post:
+      operationId: acceptChallenge
+      tags: [challenges]
+      summary: Accept an open challenge
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Accepted challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Challenge"
+        "404":
+          description: Challenge not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /moments:
+    get:
+      operationId: listMoments
+      tags: [moments]
+      summary: List social moments feed
+      responses:
+        "200":
+          description: Moments feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Moment"
+    post:
+      operationId: createMoment
+      tags: [moments]
+      summary: Post a moment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMomentBody"
+      responses:
+        "201":
+          description: Created moment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Moment"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /moments/{id}/like:
+    post:
+      operationId: likeMoment
+      tags: [moments]
+      summary: Like a moment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated moment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Moment"
+        "404":
+          description: Moment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unlikeMoment
+      tags: [moments]
+      summary: Unlike a moment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated moment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Moment"
+        "404":
+          description: Moment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leagues:
+    get:
+      operationId: listLeagues
+      tags: [leagues]
+      summary: List all leagues
+      responses:
+        "200":
+          description: List of leagues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/League"
+
+  /leagues/{id}/join:
+    post:
+      operationId: joinLeague
+      tags: [leagues]
+      summary: Join or request to join a league
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: League joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "404":
+          description: League not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +318,288 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        name:
+          type: string
+        rank:
+          type: string
+        level:
+          type: integer
+        xp:
+          type: integer
+        xpToNext:
+          type: integer
+        isPro:
+          type: boolean
+        careerAvg:
+          type: integer
+        highGame:
+          type: integer
+        totalGames:
+          type: integer
+        team:
+          type: string
+        rating:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - username
+        - name
+        - rank
+        - level
+        - xp
+        - xpToNext
+        - isPro
+        - careerAvg
+        - highGame
+        - totalGames
+        - team
+        - rating
+        - createdAt
+        - updatedAt
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        username:
+          type: string
+        team:
+          type: string
+        isPro:
+          type: boolean
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        score:
+          type: integer
+        date:
+          type: string
+        alley:
+          type: string
+        oilPattern:
+          type: string
+        ballUsed:
+          type: string
+        notes:
+          type: string
+        verified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - score
+        - date
+        - alley
+        - oilPattern
+        - ballUsed
+        - notes
+        - verified
+        - createdAt
+
+    CreateGameBody:
+      type: object
+      properties:
+        score:
+          type: integer
+        date:
+          type: string
+        alley:
+          type: string
+        oilPattern:
+          type: string
+        ballUsed:
+          type: string
+        notes:
+          type: string
+        verified:
+          type: boolean
+      required:
+        - score
+        - date
+        - alley
+        - oilPattern
+        - ballUsed
+
+    Challenge:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        username:
+          type: string
+        rank:
+          type: string
+        rankColor:
+          type: string
+        postedScore:
+          type: integer
+        stake:
+          type: integer
+        status:
+          type: string
+        initials:
+          type: string
+        avatarColor:
+          type: string
+        isPro:
+          type: boolean
+        timeAgo:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - username
+        - rank
+        - rankColor
+        - postedScore
+        - stake
+        - status
+        - initials
+        - avatarColor
+        - isPro
+        - timeAgo
+        - createdAt
+
+    CreateChallengeBody:
+      type: object
+      properties:
+        postedScore:
+          type: integer
+        stake:
+          type: integer
+      required:
+        - postedScore
+        - stake
+
+    Moment:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        username:
+          type: string
+        rank:
+          type: string
+        rankColor:
+          type: string
+        content:
+          type: string
+        score:
+          type: ["integer", "null"]
+        type:
+          type: string
+        likes:
+          type: integer
+        comments:
+          type: integer
+        initials:
+          type: string
+        avatarColor:
+          type: string
+        liked:
+          type: boolean
+        timeAgo:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - username
+        - rank
+        - rankColor
+        - content
+        - type
+        - likes
+        - comments
+        - initials
+        - avatarColor
+        - liked
+        - timeAgo
+        - createdAt
+
+    CreateMomentBody:
+      type: object
+      properties:
+        content:
+          type: string
+        score:
+          type: ["integer", "null"]
+        type:
+          type: string
+      required:
+        - content
+        - type
+
+    League:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        members:
+          type: integer
+        type:
+          type: string
+        level:
+          type: string
+        avgScore:
+          type: integer
+        weeklyChallenge:
+          type: ["string", "null"]
+        joined:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - description
+        - members
+        - type
+        - level
+        - avgScore
+        - joined
+        - createdAt

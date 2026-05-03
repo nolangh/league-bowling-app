@@ -1,7 +1,7 @@
 # League — Premium Bowling App
 
 ## Overview
-A premium mobile bowling app built with Expo (React Native). Features skill-based money challenges, a social Moments feed, score tracking with AI verification, league discovery, and a RevenueCat Pro subscription.
+A premium mobile bowling app built with Expo (React Native) backed by a real Express + PostgreSQL API. Features skill-based money challenges, a social Moments feed, score tracking with AI verification, league discovery, and a RevenueCat Pro subscription.
 
 ## Design System
 - **Background**: `#f0f0e8` (warm off-white)
@@ -13,10 +13,12 @@ A premium mobile bowling app built with Expo (React Native). Features skill-base
 - **Dark card**: `#1a1a16` (for rank/hero cards)
 
 ## Architecture
-- **Framework**: Expo SDK 54, expo-router v6 (file-based routing)
-- **State**: React Context + AsyncStorage (no backend)
+- **Mobile**: Expo SDK 54, expo-router v6 (file-based routing)
+- **Backend**: Express 5 + Drizzle ORM + PostgreSQL (artifacts/api-server)
+- **API contract**: OpenAPI-first with Orval codegen (lib/api-spec)
 - **Subscriptions**: RevenueCat (`react-native-purchases`)
 - **Tabs**: NativeTabs (iOS 26 liquid glass) + ClassicTabs fallback
+- **Auth**: Demo user (id=1) — no login required; demoUserMiddleware sets req.userId = 1
 
 ## App Structure
 ```
@@ -35,20 +37,66 @@ artifacts/league/
     RankBadge.tsx        ← Rank display pill
     StakeModal.tsx       ← Stake selector
   context/
-    AppContext.tsx        ← App-wide state (user, games, challenges, moments)
+    AppContext.tsx        ← App-wide state — fetches from real API on mount
   lib/
+    api.ts               ← Lightweight fetch wrapper (api.get/post/patch/delete)
     revenuecat.tsx       ← RevenueCat integration (SubscriptionProvider, useSubscription)
-  constants/
-    colors.ts            ← Design tokens
-  assets/images/
-    icon.png             ← AI-generated app icon
-    hero_bowling.png     ← Content images
-    strike_moment.png
-    scorecard.png
-scripts/
+
+artifacts/api-server/
   src/
-    revenueCatClient.ts  ← RevenueCat OAuth client
-    seedRevenueCat.ts    ← Seed script for RC entities
+    app.ts               ← Express app (pinoHttp, cors, demoUserMiddleware)
+    routes/
+      health.ts          ← GET /healthz
+      users.ts           ← GET/PATCH /users/me
+      games.ts           ← GET/POST /games
+      challenges.ts      ← GET /challenges, GET /challenges/my, POST /challenges, POST /challenges/:id/accept
+      moments.ts         ← GET/POST /moments, POST/DELETE /moments/:id/like
+      leagues.ts         ← GET /leagues, POST /leagues/:id/join
+    middlewares/
+      demoUser.ts        ← Sets req.userId = 1, auto-creates demo user if missing
+    lib/
+      logger.ts          ← pino logger
+      timeAgo.ts         ← Relative time helper
+
+lib/api-spec/openapi.yaml   ← Single source of truth for all API contracts
+lib/api-zod/                ← Generated Zod validators (from codegen)
+lib/api-client-react/       ← Generated React Query hooks (from codegen)
+lib/db/src/schema/          ← Drizzle table definitions
+  users.ts, games.ts, challenges.ts, moments.ts, leagues.ts
+
+scripts/src/
+  seedLeague.ts        ← Seeds demo user, NPC users, challenges, moments, leagues
+  seedRevenueCat.ts    ← Seeds RC entities
+```
+
+## Backend API Endpoints
+All routes are under `/api`:
+- `GET /healthz` — health check
+- `GET /users/me` — current user profile
+- `PATCH /users/me` — update profile / isPro flag
+- `GET /games` — list user's games (newest first)
+- `POST /games` — log game; auto-updates careerAvg, highGame, totalGames, XP
+- `GET /challenges` — open challenges from other players
+- `GET /challenges/my` — current user's posted challenges
+- `POST /challenges` — post a new challenge
+- `POST /challenges/:id/accept` — accept a challenge (sets status → active)
+- `GET /moments` — social feed with liked status
+- `POST /moments` — create a moment post
+- `POST /moments/:id/like` — like a moment
+- `DELETE /moments/:id/like` — unlike a moment
+- `GET /leagues` — all leagues with joined status
+- `POST /leagues/:id/join` — join (or request to join) a league
+
+## Database Commands
+```bash
+# Push schema changes to DB
+pnpm --filter @workspace/db run push
+
+# Re-seed the database
+pnpm --filter @workspace/scripts run seed:league
+
+# Regenerate Zod validators + React Query hooks after spec changes
+pnpm --filter @workspace/api-spec run codegen
 ```
 
 ## RevenueCat Setup
@@ -57,16 +105,15 @@ scripts/
 - **Product**: `league_pro_monthly` ($4.99/month)
 - **Offering**: `default`
 - **Package**: `$rc_monthly`
-- Run seed script: `pnpm --filter @workspace/scripts run seed:revenuecat`
+- Run seed: `pnpm --filter @workspace/scripts run seed:revenuecat`
 
 ## Environment Variables
+- `DATABASE_URL` — PostgreSQL connection string (auto-provisioned)
+- `SESSION_SECRET` — session secret
 - `EXPO_PUBLIC_REVENUECAT_TEST_API_KEY`
 - `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`
 - `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`
 - `REVENUECAT_PROJECT_ID`
-- `REVENUECAT_TEST_STORE_APP_ID`
-- `REVENUECAT_APPLE_APP_STORE_APP_ID`
-- `REVENUECAT_GOOGLE_PLAY_STORE_APP_ID`
 
 ## Rank System
 Rookie → Amateur → Intermediate → Advanced → Expert → Elite → Diamond IV–I → Platinum II–I → Legend → Kingpin
