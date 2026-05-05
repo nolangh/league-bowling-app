@@ -179,9 +179,14 @@ export const ListMomentsResponseItem = zod.object({
   type: zod.string(),
   likes: zod.number(),
   comments: zod.number(),
+  dislikes: zod.number(),
+  saves: zod.number(),
+  tags: zod.array(zod.string()),
   initials: zod.string(),
   avatarColor: zod.string(),
   liked: zod.boolean(),
+  disliked: zod.boolean(),
+  saved: zod.boolean(),
   timeAgo: zod.string(),
   createdAt: zod.coerce.date(),
 });
@@ -194,6 +199,7 @@ export const CreateMomentBody = zod.object({
   content: zod.string(),
   score: zod.number().nullish(),
   type: zod.string(),
+  tags: zod.array(zod.string()).optional(),
 });
 
 /**
@@ -214,9 +220,14 @@ export const LikeMomentResponse = zod.object({
   type: zod.string(),
   likes: zod.number(),
   comments: zod.number(),
+  dislikes: zod.number(),
+  saves: zod.number(),
+  tags: zod.array(zod.string()),
   initials: zod.string(),
   avatarColor: zod.string(),
   liked: zod.boolean(),
+  disliked: zod.boolean(),
+  saved: zod.boolean(),
   timeAgo: zod.string(),
   createdAt: zod.coerce.date(),
 });
@@ -239,9 +250,14 @@ export const UnlikeMomentResponse = zod.object({
   type: zod.string(),
   likes: zod.number(),
   comments: zod.number(),
+  dislikes: zod.number(),
+  saves: zod.number(),
+  tags: zod.array(zod.string()),
   initials: zod.string(),
   avatarColor: zod.string(),
   liked: zod.boolean(),
+  disliked: zod.boolean(),
+  saved: zod.boolean(),
   timeAgo: zod.string(),
   createdAt: zod.coerce.date(),
 });

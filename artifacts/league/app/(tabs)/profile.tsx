@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
 import { useApp, getRankColor } from "@/context/AppContext";
@@ -21,6 +22,7 @@ import { useSubscription } from "@/lib/revenuecat";
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, games, setUserPro } = useApp();
   const { isSubscribed, offerings, purchase, isPurchasing, restore, isRestoring, isConfigured } = useSubscription();
   const [proModalVisible, setProModalVisible] = useState(false);
@@ -171,6 +173,25 @@ export default function ProfileScreen() {
                 <Feather name="check-circle" size={16} color={colors.primary} />
               )}
             </View>
+          ))}
+        </View>
+
+        {/* Friends & Social */}
+        <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
+          {[
+            { icon: "users" as const, label: "Friends", href: "/friends" as const },
+            { icon: "bookmark" as const, label: "Saved Posts", href: null },
+          ].map((item, i) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[styles.settingsRow, i < 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
+              activeOpacity={0.7}
+              onPress={() => { if (item.href) router.push(item.href as any); }}
+            >
+              <Feather name={item.icon} size={18} color={colors.primary} />
+              <Text style={[styles.settingsLabel, { color: colors.foreground }]}>{item.label}</Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
           ))}
         </View>
 

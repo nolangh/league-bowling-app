@@ -529,11 +529,23 @@ components:
           type: integer
         comments:
           type: integer
+        dislikes:
+          type: integer
+        saves:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
         initials:
           type: string
         avatarColor:
           type: string
         liked:
+          type: boolean
+        disliked:
+          type: boolean
+        saved:
           type: boolean
         timeAgo:
           type: string
@@ -550,9 +562,14 @@ components:
         - type
         - likes
         - comments
+        - dislikes
+        - saves
+        - tags
         - initials
         - avatarColor
         - liked
+        - disliked
+        - saved
         - timeAgo
         - createdAt
 
@@ -565,6 +582,10 @@ components:
           type: ["integer", "null"]
         type:
           type: string
+        tags:
+          type: array
+          items:
+            type: string
       required:
         - content
         - type

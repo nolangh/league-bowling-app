@@ -13,13 +13,25 @@ import { timeAgo } from "../lib/timeAgo";
 
 const router: IRouter = Router();
 
+export function rankColor(rank: string): string {
+  const colors: Record<string, string> = {
+    Rookie: "#a0a0a0", Amateur: "#a0a0a0",
+    Intermediate: "#a8c870", Advanced: "#a8c870",
+    Expert: "#f5c842", Elite: "#f5c842",
+    "Diamond IV": "#60c8ff", "Diamond III": "#60c8ff",
+    "Diamond II": "#60c8ff", "Diamond I": "#60c8ff",
+    "Platinum II": "#c8a8e8", "Platinum I": "#c8a8e8",
+    Legend: "#9fe870", Kingpin: "#ff6b35",
+  };
+  return colors[rank] ?? "#a0a0a0";
+}
+
 async function formatMoment(row: Record<string, unknown>, userId: number) {
-  const { data: like } = await supabaseAdmin
-    .from("moment_likes")
-    .select("id")
-    .eq("moment_id", row.id)
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [likeRes, dislikeRes, saveRes] = await Promise.all([
+    supabaseAdmin.from("moment_likes").select("id").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
+    supabaseAdmin.from("moment_dislikes").select("id").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
+    supabaseAdmin.from("moment_saves").select("id").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
+  ]);
 
   return {
     id: row.id,
@@ -31,20 +43,65 @@ async function formatMoment(row: Record<string, unknown>, userId: number) {
     score: row.score ?? null,
     type: row.type,
     likes: row.likes,
-    comments: row.comments,
+    comments: row.comment_count ?? row.comments ?? 0,
+    dislikes: row.dislike_count ?? 0,
+    saves: row.save_count ?? 0,
+    tags: (row.tags as string[]) ?? [],
     initials: row.initials,
     avatarColor: row.avatar_color,
     createdAt: row.created_at,
-    liked: !!like,
+    liked: !!likeRes.data,
+    disliked: !!dislikeRes.data,
+    saved: !!saveRes.data,
     timeAgo: timeAgo(new Date(row.created_at as string)),
   };
 }
 
+router.get("/moments/search", async (req, res): Promise<void> => {
+  const q = (req.query.q as string ?? "").trim();
+  const tag = (req.query.tag as string ?? "").trim().toLowerCase().replace(/^#/, "");
+
+  let query = supabaseAdmin
+    .from("moments")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (tag) {
+    query = query.contains("tags", [tag]);
+  } else if (q) {
+    query = query.ilike("content", `%${q}%`);
+  } else {
+    res.json([]);
+    return;
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  const formatted = await Promise.all(
+    (data ?? []).map((m: Record<string, unknown>) => formatMoment(m, req.userId))
+  );
+
+  res.json(formatted);
+});
+
 router.get("/moments", async (req, res): Promise<void> => {
-  const { data, error } = await supabaseAdmin
+  const tag = (req.query.tag as string ?? "").trim().toLowerCase().replace(/^#/, "");
+
+  let query = supabaseAdmin
     .from("moments")
     .select("*")
     .order("created_at", { ascending: false });
+
+  if (tag) {
+    query = query.contains("tags", [tag]);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     res.status(500).json({ error: error.message });
@@ -56,6 +113,27 @@ router.get("/moments", async (req, res): Promise<void> => {
   );
 
   res.json(ListMomentsResponse.parse(formatted));
+});
+
+router.get("/moments/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("moments")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) {
+    res.status(404).json({ error: "Moment not found" });
+    return;
+  }
+
+  res.json(await formatMoment(data as Record<string, unknown>, req.userId));
 });
 
 router.post("/moments", async (req, res): Promise<void> => {
@@ -76,6 +154,14 @@ router.post("/moments", async (req, res): Promise<void> => {
     return;
   }
 
+  // Extract hashtags from content
+  const tagMatches = (parsed.data.content as string).match(/#(\w+)/g) ?? [];
+  const extractedTags = tagMatches.map((t) => t.slice(1).toLowerCase());
+  const bodyTags: string[] = Array.isArray((parsed.data as Record<string, unknown>).tags)
+    ? ((parsed.data as Record<string, unknown>).tags as string[])
+    : [];
+  const tags = [...new Set([...extractedTags, ...bodyTags])];
+
   const { data: moment, error: insertErr } = await supabaseAdmin
     .from("moments")
     .insert({
@@ -88,6 +174,10 @@ router.post("/moments", async (req, res): Promise<void> => {
       type: parsed.data.type,
       likes: 0,
       comments: 0,
+      comment_count: 0,
+      dislike_count: 0,
+      save_count: 0,
+      tags,
       initials: user.username.substring(0, 2),
       avatar_color: "#1a3c2a",
     })
@@ -100,7 +190,7 @@ router.post("/moments", async (req, res): Promise<void> => {
   }
 
   res.status(201).json(
-    ListMomentsResponseItem.parse(await formatMoment(moment, req.userId))
+    ListMomentsResponseItem.parse(await formatMoment(moment as Record<string, unknown>, req.userId))
   );
 });
 
@@ -130,6 +220,10 @@ router.post("/moments/:id/like", async (req, res): Promise<void> => {
     .maybeSingle();
 
   if (!existingLike) {
+    // Remove dislike if exists
+    await supabaseAdmin.from("moment_dislikes")
+      .delete().eq("moment_id", params.data.id).eq("user_id", req.userId);
+
     await supabaseAdmin.from("moment_likes").insert({
       moment_id: params.data.id,
       user_id: req.userId,
@@ -142,11 +236,11 @@ router.post("/moments/:id/like", async (req, res): Promise<void> => {
       .select()
       .single();
 
-    res.json(LikeMomentResponse.parse(await formatMoment(updated, req.userId)));
+    res.json(LikeMomentResponse.parse(await formatMoment(updated as Record<string, unknown>, req.userId)));
     return;
   }
 
-  res.json(LikeMomentResponse.parse(await formatMoment(moment, req.userId)));
+  res.json(LikeMomentResponse.parse(await formatMoment(moment as Record<string, unknown>, req.userId)));
 });
 
 router.delete("/moments/:id/like", async (req, res): Promise<void> => {
@@ -183,31 +277,11 @@ router.delete("/moments/:id/like", async (req, res): Promise<void> => {
       .select()
       .single();
 
-    res.json(UnlikeMomentResponse.parse(await formatMoment(updated, req.userId)));
+    res.json(UnlikeMomentResponse.parse(await formatMoment(updated as Record<string, unknown>, req.userId)));
     return;
   }
 
-  res.json(UnlikeMomentResponse.parse(await formatMoment(moment, req.userId)));
+  res.json(UnlikeMomentResponse.parse(await formatMoment(moment as Record<string, unknown>, req.userId)));
 });
-
-function rankColor(rank: string): string {
-  const colors: Record<string, string> = {
-    Rookie: "#a0a0a0",
-    Amateur: "#a0a0a0",
-    Intermediate: "#a8c870",
-    Advanced: "#a8c870",
-    Expert: "#f5c842",
-    Elite: "#f5c842",
-    "Diamond IV": "#60c8ff",
-    "Diamond III": "#60c8ff",
-    "Diamond II": "#60c8ff",
-    "Diamond I": "#60c8ff",
-    "Platinum II": "#c8a8e8",
-    "Platinum I": "#c8a8e8",
-    Legend: "#9fe870",
-    Kingpin: "#ff6b35",
-  };
-  return colors[rank] ?? "#a0a0a0";
-}
 
 export default router;

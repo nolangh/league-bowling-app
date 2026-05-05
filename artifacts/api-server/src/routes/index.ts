@@ -5,6 +5,11 @@ import gamesRouter from "./games";
 import challengesRouter from "./challenges";
 import momentsRouter from "./moments";
 import leaguesRouter from "./leagues";
+import friendsRouter from "./friends";
+import leaderboardRouter from "./leaderboard";
+import commentsRouter from "./comments";
+import savesRouter from "./saves";
+import dislikesRouter from "./dislikes";
 
 const router: IRouter = Router();
 
@@ -14,5 +19,10 @@ router.use(gamesRouter);
 router.use(challengesRouter);
 router.use(momentsRouter);
 router.use(leaguesRouter);
+router.use(friendsRouter);
+router.use(leaderboardRouter);
+router.use(commentsRouter);
+router.use(savesRouter);
+router.use(dislikesRouter);
 
 export default router;

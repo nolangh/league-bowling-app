@@ -50,11 +50,48 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayoutNav() {
+  const colors = useColors();
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-up" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="moment/[id]"
+        options={{
+          headerShown: true,
+          title: "Post",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="friends"
+        options={{
+          headerShown: true,
+          title: "Friends",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="user/[id]"
+        options={{
+          headerShown: true,
+          title: "Profile",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          presentation: "card",
+        }}
+      />
     </Stack>
   );
 }

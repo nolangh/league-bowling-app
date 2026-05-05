@@ -24,6 +24,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "plus.square", selected: "plus.square.fill" }} />
         <Label>Log</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="leaderboard">
+        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
+        <Label>Ranking</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="leagues">
         <Icon sf={{ default: "trophy", selected: "trophy.fill" }} />
         <Label>Leagues</Label>
@@ -67,6 +71,7 @@ function ClassicTabLayout() {
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
@@ -74,11 +79,7 @@ function ClassicTabLayout() {
         options={{
           title: "Challenges",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="bolt" tintColor={color} size={24} />
-            ) : (
-              <Feather name="zap" size={22} color={color} />
-            ),
+            isIOS ? <SymbolView name="bolt" tintColor={color} size={22} /> : <Feather name="zap" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -86,11 +87,7 @@ function ClassicTabLayout() {
         options={{
           title: "Moments",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="play.square" tintColor={color} size={24} />
-            ) : (
-              <Feather name="play-circle" size={22} color={color} />
-            ),
+            isIOS ? <SymbolView name="play.square" tintColor={color} size={22} /> : <Feather name="play-circle" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -98,11 +95,15 @@ function ClassicTabLayout() {
         options={{
           title: "Log",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="plus.square" tintColor={color} size={24} />
-            ) : (
-              <Feather name="plus-square" size={22} color={color} />
-            ),
+            isIOS ? <SymbolView name="plus.square" tintColor={color} size={22} /> : <Feather name="plus-square" size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: "Ranking",
+          tabBarIcon: ({ color }) =>
+            isIOS ? <SymbolView name="chart.bar" tintColor={color} size={22} /> : <Feather name="bar-chart-2" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -110,11 +111,7 @@ function ClassicTabLayout() {
         options={{
           title: "Leagues",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="trophy" tintColor={color} size={24} />
-            ) : (
-              <Feather name="award" size={22} color={color} />
-            ),
+            isIOS ? <SymbolView name="trophy" tintColor={color} size={22} /> : <Feather name="award" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -122,11 +119,7 @@ function ClassicTabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+            isIOS ? <SymbolView name="person" tintColor={color} size={22} /> : <Feather name="user" size={20} color={color} />,
         }}
       />
     </Tabs>

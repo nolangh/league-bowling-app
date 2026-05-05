@@ -3,20 +3,10 @@ import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 export type Rank =
-  | "Rookie"
-  | "Amateur"
-  | "Intermediate"
-  | "Advanced"
-  | "Expert"
-  | "Elite"
-  | "Diamond IV"
-  | "Diamond III"
-  | "Diamond II"
-  | "Diamond I"
-  | "Platinum II"
-  | "Platinum I"
-  | "Legend"
-  | "Kingpin";
+  | "Rookie" | "Amateur" | "Intermediate" | "Advanced"
+  | "Expert" | "Elite" | "Diamond IV" | "Diamond III"
+  | "Diamond II" | "Diamond I" | "Platinum II" | "Platinum I"
+  | "Legend" | "Kingpin";
 
 export interface UserProfile {
   id?: number;
@@ -66,6 +56,7 @@ export interface Challenge {
 
 export interface Moment {
   id: string;
+  userId?: number;
   username: string;
   rank: Rank;
   rankColor: string;
@@ -74,10 +65,65 @@ export interface Moment {
   type: "strike" | "game" | "challenge" | "advice";
   likes: number;
   comments: number;
+  dislikes: number;
+  saves: number;
+  tags: string[];
   timeAgo: string;
   liked: boolean;
+  disliked: boolean;
+  saved: boolean;
   initials: string;
   avatarColor: string;
+  createdAt?: string;
+}
+
+export interface Comment {
+  id: string;
+  momentId: string;
+  userId: number;
+  username: string;
+  initials: string;
+  avatarColor: string;
+  rank: Rank;
+  rankColor: string;
+  content: string;
+  timeAgo: string;
+  isOwn: boolean;
+}
+
+export interface Friend {
+  id: string;
+  userId: number;
+  username: string;
+  name: string;
+  rank: Rank;
+  rankColor: string;
+  rating: number;
+  careerAvg: number;
+  highGame: number;
+  isPro: boolean;
+  initials: string;
+  avatarColor: string;
+  friendsSince?: string | null;
+  friendStatus?: string | null;
+}
+
+export interface LeaderboardEntry {
+  position: number;
+  id: number;
+  username: string;
+  name: string;
+  rank: Rank;
+  rankColor: string;
+  rating: number;
+  careerAvg: number;
+  highGame: number;
+  totalGames: number;
+  isPro: boolean;
+  team: string;
+  initials: string;
+  avatarColor: string;
+  isMe: boolean;
 }
 
 export interface League {
@@ -93,39 +139,23 @@ export interface League {
 }
 
 const RANK_COLORS: Record<string, string> = {
-  Rookie: "#a0a0a0",
-  Amateur: "#a0a0a0",
-  Intermediate: "#a8c870",
-  Advanced: "#a8c870",
-  Expert: "#f5c842",
-  Elite: "#f5c842",
-  "Diamond IV": "#60c8ff",
-  "Diamond III": "#60c8ff",
-  "Diamond II": "#60c8ff",
-  "Diamond I": "#60c8ff",
-  "Platinum II": "#c8a8e8",
-  "Platinum I": "#c8a8e8",
-  Legend: "#9fe870",
-  Kingpin: "#ff6b35",
+  Rookie: "#a0a0a0", Amateur: "#a0a0a0",
+  Intermediate: "#a8c870", Advanced: "#a8c870",
+  Expert: "#f5c842", Elite: "#f5c842",
+  "Diamond IV": "#60c8ff", "Diamond III": "#60c8ff",
+  "Diamond II": "#60c8ff", "Diamond I": "#60c8ff",
+  "Platinum II": "#c8a8e8", "Platinum I": "#c8a8e8",
+  Legend: "#9fe870", Kingpin: "#ff6b35",
 };
 
-export function getRankColor(rank: Rank): string {
+export function getRankColor(rank: Rank | string): string {
   return RANK_COLORS[rank] ?? "#a0a0a0";
 }
 
 const FALLBACK_USER: UserProfile = {
-  name: "Bowler",
-  username: "BOWLER",
-  rank: "Rookie",
-  level: 1,
-  xp: 0,
-  xpToNext: 1000,
-  isPro: false,
-  careerAvg: 0,
-  highGame: 0,
-  totalGames: 0,
-  team: "Solo",
-  rating: 1000,
+  name: "Bowler", username: "BOWLER", rank: "Rookie",
+  level: 1, xp: 0, xpToNext: 1000, isPro: false,
+  careerAvg: 0, highGame: 0, totalGames: 0, team: "Solo", rating: 1000,
 };
 
 interface AppContextValue {
@@ -138,11 +168,19 @@ interface AppContextValue {
   loading: boolean;
   logGame: (game: Omit<Game, "id">) => Promise<void>;
   toggleLikeMoment: (momentId: string) => void;
+  toggleDislikeMoment: (momentId: string) => void;
+  saveMoment: (momentId: string, listId?: number) => Promise<void>;
+  unsaveMoment: (momentId: string) => Promise<void>;
+  postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[]) => Promise<void>;
   acceptChallenge: (challengeId: string) => void;
   postChallenge: (score: number, stake: number) => void;
   setUserPro: (isPro: boolean) => void;
   joinLeague: (leagueId: string) => void;
   refreshAll: () => Promise<void>;
+  // Friends
+  sendFriendRequest: (userId: number) => Promise<void>;
+  acceptFriendRequest: (userId: number) => Promise<void>;
+  removeFriend: (userId: number) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -157,10 +195,11 @@ type ApiChallenge = {
   status: string; initials: string; avatarColor: string;
 };
 type ApiMoment = {
-  id: number; username: string; rank: string; rankColor: string;
+  id: number; userId?: number; username: string; rank: string; rankColor: string;
   content: string; score?: number | null; type: string;
-  likes: number; comments: number; timeAgo: string; liked: boolean;
-  initials: string; avatarColor: string;
+  likes: number; comments: number; dislikes?: number; saves?: number; tags?: string[];
+  timeAgo: string; liked: boolean; disliked?: boolean; saved?: boolean;
+  initials: string; avatarColor: string; createdAt?: string;
 };
 type ApiLeague = {
   id: number; name: string; description: string; members: number;
@@ -179,7 +218,18 @@ function toChallenge(c: ApiChallenge): Challenge {
   return { ...c, id: String(c.id), rank: c.rank as Rank, status: c.status as Challenge["status"] };
 }
 function toMoment(m: ApiMoment): Moment {
-  return { ...m, id: String(m.id), rank: m.rank as Rank, score: m.score ?? undefined, type: m.type as Moment["type"] };
+  return {
+    ...m,
+    id: String(m.id),
+    rank: m.rank as Rank,
+    score: m.score ?? undefined,
+    type: m.type as Moment["type"],
+    dislikes: m.dislikes ?? 0,
+    saves: m.saves ?? 0,
+    tags: m.tags ?? [],
+    disliked: m.disliked ?? false,
+    saved: m.saved ?? false,
+  };
 }
 function toLeague(l: ApiLeague): League {
   return { ...l, id: String(l.id), type: l.type as League["type"], weeklyChallenge: l.weeklyChallenge ?? undefined };
@@ -200,38 +250,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshAll().finally(() => setLoading(false));
     setupRealtime();
     return () => {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current);
-      }
+      if (realtimeRef.current) supabase.removeChannel(realtimeRef.current);
     };
   }, []);
 
   function setupRealtime() {
     const channel = supabase
       .channel("moments-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "moments" },
-        (payload) => {
-          const raw = payload.new as ApiMoment & { created_at: string };
-          const newMoment: Moment = {
-            id: String(raw.id),
-            username: raw.username,
-            rank: raw.rank as Rank,
-            rankColor: raw.rank_color ?? "#a0a0a0",
-            content: raw.content,
-            score: raw.score ?? undefined,
-            type: raw.type as Moment["type"],
-            likes: raw.likes ?? 0,
-            comments: raw.comments ?? 0,
-            timeAgo: "just now",
-            liked: false,
-            initials: raw.initials ?? raw.username.slice(0, 2),
-            avatarColor: raw.avatar_color ?? "#1a3c2a",
-          };
-          setMoments((prev) => [newMoment, ...prev]);
-        }
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "moments" }, (payload) => {
+        const raw = payload.new as ApiMoment & { created_at: string; rank_color?: string; avatar_color?: string; comment_count?: number; dislike_count?: number; save_count?: number };
+        const newMoment: Moment = {
+          id: String(raw.id),
+          username: raw.username,
+          rank: raw.rank as Rank,
+          rankColor: raw.rank_color ?? raw.rankColor ?? "#a0a0a0",
+          content: raw.content,
+          score: raw.score ?? undefined,
+          type: raw.type as Moment["type"],
+          likes: raw.likes ?? 0,
+          comments: raw.comment_count ?? raw.comments ?? 0,
+          dislikes: raw.dislike_count ?? 0,
+          saves: raw.save_count ?? 0,
+          tags: raw.tags ?? [],
+          timeAgo: "just now",
+          liked: false,
+          disliked: false,
+          saved: false,
+          initials: raw.initials ?? raw.username.slice(0, 2),
+          avatarColor: raw.avatar_color ?? raw.avatarColor ?? "#1a3c2a",
+          createdAt: raw.created_at,
+        };
+        setMoments((prev) => [newMoment, ...prev]);
+      })
       .subscribe();
     realtimeRef.current = channel;
   }
@@ -269,6 +319,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toggleLikeMoment = async (momentId: string) => {
     const current = moments.find((m) => m.id === momentId);
     if (!current) return;
+    // Optimistic
+    setMoments((prev) =>
+      prev.map((m) =>
+        m.id === momentId
+          ? { ...m, liked: !m.liked, likes: m.liked ? m.likes - 1 : m.likes + 1, disliked: m.liked ? m.disliked : false }
+          : m
+      )
+    );
     try {
       let updated: ApiMoment;
       if (current.liked) {
@@ -277,14 +335,74 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updated = await api.post<ApiMoment>(`/moments/${momentId}/like`);
       }
       setMoments((prev) => prev.map((m) => (m.id === momentId ? toMoment(updated) : m)));
+    } catch { /* keep optimistic */ }
+  };
+
+  const toggleDislikeMoment = async (momentId: string) => {
+    const current = moments.find((m) => m.id === momentId);
+    if (!current) return;
+    setMoments((prev) =>
+      prev.map((m) =>
+        m.id === momentId
+          ? { ...m, disliked: !m.disliked, dislikes: m.disliked ? m.dislikes - 1 : m.dislikes + 1, liked: m.disliked ? m.liked : false }
+          : m
+      )
+    );
+    try {
+      if (current.disliked) {
+        await api.delete(`/moments/${momentId}/dislike`);
+      } else {
+        await api.post(`/moments/${momentId}/dislike`);
+      }
+      const updated = await api.get<ApiMoment>(`/moments/${momentId}`);
+      setMoments((prev) => prev.map((m) => (m.id === momentId ? toMoment(updated) : m)));
+    } catch { /* keep optimistic */ }
+  };
+
+  const saveMoment = async (momentId: string, listId?: number) => {
+    setMoments((prev) =>
+      prev.map((m) => m.id === momentId ? { ...m, saved: true, saves: m.saves + 1 } : m)
+    );
+    try {
+      await api.post(`/moments/${momentId}/save`, listId ? { listId } : {});
+    } catch { /* keep optimistic */ }
+  };
+
+  const unsaveMoment = async (momentId: string) => {
+    setMoments((prev) =>
+      prev.map((m) => m.id === momentId ? { ...m, saved: false, saves: Math.max(0, m.saves - 1) } : m)
+    );
+    try {
+      await api.delete(`/moments/${momentId}/save`);
+    } catch { /* keep optimistic */ }
+  };
+
+  const postMoment = async (content: string, type: Moment["type"], score?: number, tags?: string[]) => {
+    try {
+      const created = await api.post<ApiMoment>("/moments", { content, type, score, tags });
+      setMoments((prev) => [toMoment(created), ...prev]);
     } catch {
-      setMoments((prev) =>
-        prev.map((m) =>
-          m.id === momentId
-            ? { ...m, liked: !m.liked, likes: m.liked ? m.likes - 1 : m.likes + 1 }
-            : m
-        )
-      );
+      const newMoment: Moment = {
+        id: Date.now().toString(),
+        username: user.username,
+        rank: user.rank,
+        rankColor: getRankColor(user.rank),
+        content,
+        score,
+        type,
+        likes: 0,
+        comments: 0,
+        dislikes: 0,
+        saves: 0,
+        tags: tags ?? [],
+        timeAgo: "just now",
+        liked: false,
+        disliked: false,
+        saved: false,
+        initials: user.username.substring(0, 2),
+        avatarColor: "#1a3c2a",
+      };
+      setMoments((prev) => [newMoment, ...prev]);
     }
   };
 
@@ -333,10 +451,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   };
 
+  const sendFriendRequest = async (userId: number) => {
+    await api.post(`/friends/${userId}/request`);
+  };
+
+  const acceptFriendRequest = async (userId: number) => {
+    await api.post(`/friends/${userId}/accept`);
+  };
+
+  const removeFriend = async (userId: number) => {
+    await api.delete(`/friends/${userId}`);
+  };
+
   return (
     <AppContext.Provider value={{
       user, games, challenges, myActiveChallenges, moments, leagues, loading,
-      logGame, toggleLikeMoment, acceptChallenge, postChallenge, setUserPro, joinLeague, refreshAll,
+      logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
+      acceptChallenge, postChallenge, setUserPro, joinLeague, refreshAll,
+      sendFriendRequest, acceptFriendRequest, removeFriend,
     }}>
       {children}
     </AppContext.Provider>

@@ -94,9 +94,14 @@ export interface Moment {
   type: string;
   likes: number;
   comments: number;
+  dislikes: number;
+  saves: number;
+  tags: string[];
   initials: string;
   avatarColor: string;
   liked: boolean;
+  disliked: boolean;
+  saved: boolean;
   timeAgo: string;
   createdAt: string;
 }
@@ -106,6 +111,7 @@ export interface CreateMomentBody {
   /** @nullable */
   score?: number | null;
   type: string;
+  tags?: string[];
 }
 
 export interface League {
