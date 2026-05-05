@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, username: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -58,6 +58,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     if (error) throw error;
+    // When autoconfirm is on, signUp returns a session immediately — apply it now
+    if (data.session) {
+      setSession(data.session);
+      setUser(data.session.user);
+      setLoading(false);
+    }
   };
 
   const signIn = async (email: string, password: string) => {

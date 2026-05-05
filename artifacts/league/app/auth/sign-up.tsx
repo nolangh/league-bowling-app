@@ -48,11 +48,8 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       await signUp(email.trim().toLowerCase(), password, username.toUpperCase());
-      Alert.alert(
-        "Check your email",
-        "We sent you a confirmation link. Click it to activate your account.",
-        [{ text: "OK", onPress: () => router.replace("/auth/sign-in") }]
-      );
+      // Session is set immediately — expo-router's AuthGuard will redirect to tabs
+      router.replace("/(tabs)");
     } catch (err: any) {
       Alert.alert("Sign Up Failed", err.message ?? "Something went wrong");
     } finally {
