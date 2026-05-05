@@ -19,6 +19,39 @@ router.get("/users/me", async (req, res): Promise<void> => {
   res.json(GetMeResponse.parse(mapUser(data)));
 });
 
+router.get("/users/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id, username, name, rank, level, career_avg, high_game, total_games, team, rating, is_pro")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json({
+    id: data.id,
+    username: data.username,
+    name: data.name,
+    rank: data.rank,
+    level: data.level,
+    careerAvg: data.career_avg,
+    highGame: data.high_game,
+    totalGames: data.total_games,
+    team: data.team,
+    rating: data.rating,
+    isPro: data.is_pro,
+  });
+});
+
 router.patch("/users/me", async (req, res): Promise<void> => {
   const parsed = UpdateMeBody.safeParse(req.body);
   if (!parsed.success) {
