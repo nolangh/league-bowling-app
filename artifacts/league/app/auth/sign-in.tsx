@@ -32,6 +32,7 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signIn(email.trim().toLowerCase(), password);
+      router.replace("/(tabs)");
     } catch (err: any) {
       Alert.alert("Sign In Failed", err.message ?? "Please check your credentials");
     } finally {

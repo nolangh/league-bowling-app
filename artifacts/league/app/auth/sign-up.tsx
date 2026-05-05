@@ -93,11 +93,12 @@ export default function SignUpScreen() {
           <Text style={[styles.label, { color: colors.mutedForeground }]}>BOWLER TAG</Text>
           <TextInput
             style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-            placeholder="STRIKER_AC"
+            placeholder="Striker_AC"
             placeholderTextColor={colors.mutedForeground}
             value={username}
-            onChangeText={(t) => setUsername(t.toUpperCase().replace(/[^A-Z0-9_]/g, ""))}
-            autoCapitalize="characters"
+            onChangeText={(t) => setUsername(t.replace(/[^a-zA-Z0-9_]/g, ""))}
+            autoCapitalize="none"
+            autoCorrect={false}
             maxLength={16}
           />
 

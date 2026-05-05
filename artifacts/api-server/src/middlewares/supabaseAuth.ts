@@ -45,10 +45,9 @@ export async function supabaseAuthMiddleware(
     }
 
     const email = data.user.email ?? "";
-    const username = email
-      .split("@")[0]
-      .toUpperCase()
-      .replace(/[^A-Z0-9_]/g, "_")
+    const metaUsername = data.user.user_metadata?.username as string | undefined;
+    const username = (metaUsername ?? email.split("@")[0])
+      .replace(/[^a-zA-Z0-9_]/g, "_")
       .slice(0, 16);
     const name = (data.user.user_metadata?.full_name as string | undefined) ?? username;
 
