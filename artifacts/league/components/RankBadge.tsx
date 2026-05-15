@@ -46,11 +46,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: {
-    fontSize: 10,
-    fontWeight: "800",
+    fontSize: 11,
+    fontFamily: "BarlowCondensed_700Bold",
     letterSpacing: 0.5,
   },
   badgeTextSmall: {
-    fontSize: 9,
+    fontSize: 10,
   },
 });

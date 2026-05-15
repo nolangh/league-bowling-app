@@ -99,7 +99,7 @@ export default function SignInScreen() {
           >
             <Text style={[styles.switchText, { color: colors.mutedForeground }]}>
               Don't have an account?{" "}
-              <Text style={{ color: colors.primary, fontWeight: "700" }}>Sign Up</Text>
+              <Text style={{ color: colors.primary, fontFamily: "DMSans_600SemiBold" }}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -121,17 +121,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   logoText: { fontSize: 36 },
-  title: { fontSize: 36, fontWeight: "900", letterSpacing: 4 },
-  subtitle: { fontSize: 15, fontWeight: "500" },
+  title: { fontSize: 42, fontFamily: "BarlowCondensed_800ExtraBold", letterSpacing: 5 },
+  subtitle: { fontSize: 15, fontFamily: "DMSans_400Regular" },
   form: { gap: 12 },
-  label: { fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: -4 },
+  label: { fontSize: 11, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 1.2, marginBottom: -4 },
   input: {
     borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    fontWeight: "500",
+    fontFamily: "DMSans_500Medium",
   },
   btn: {
     borderRadius: 50,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  btnText: { fontSize: 16, fontWeight: "800" },
+  btnText: { fontSize: 17, fontFamily: "BarlowCondensed_700Bold", letterSpacing: 0.5 },
   switchBtn: { alignItems: "center", paddingVertical: 8 },
-  switchText: { fontSize: 14 },
+  switchText: { fontSize: 14, fontFamily: "DMSans_400Regular" },
 });
