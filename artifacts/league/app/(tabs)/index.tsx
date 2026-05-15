@@ -103,7 +103,7 @@ export default function ChallengesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.background }]}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>CHALLENGES</Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
@@ -124,7 +124,7 @@ export default function ChallengesScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.tabScrollRow}
+        style={[styles.tabScrollRow, { backgroundColor: colors.background }]}
         contentContainerStyle={[styles.tabScrollContent, { borderBottomColor: colors.border }]}
       >
         {(Object.keys(TAB_LABELS) as Tab[]).map((t) => {

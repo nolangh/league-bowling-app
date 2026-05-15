@@ -456,10 +456,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const acceptChallenge = async (challengeId: string) => {
-    try {
-      await api.post<ApiChallenge>(`/challenges/${challengeId}/accept`);
-    } catch { /* ignore */ }
+    // Optimistically remove from open list
     setChallenges((prev) => prev.filter((c) => c.id !== challengeId));
+    try {
+      const accepted = await api.post<ApiChallenge>(`/challenges/${challengeId}/accept`);
+      // Add to active (accepted) list
+      setAcceptedChallenges((prev) => [toChallenge(accepted), ...prev]);
+    } catch {
+      // Re-fetch open challenges if it failed
+      try {
+        const refreshed = await api.get<ApiChallenge[]>("/challenges");
+        setChallenges(refreshed.map(toChallenge));
+      } catch { /* keep optimistic */ }
+    }
   };
 
   const postChallenge = async (score: number, stake: number) => {
