@@ -16,7 +16,13 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "androidStatusBar": {
+      "translucent": true,
+      "backgroundColor": "#00000000"
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "pan"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

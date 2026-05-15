@@ -144,7 +144,7 @@ export default function LeaderboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.background }]}>
         <View style={styles.headerTop}>
           <View>
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>RANKINGS</Text>
