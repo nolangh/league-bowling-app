@@ -32,6 +32,11 @@ export const GetMeResponse = zod.object({
   totalGames: zod.number(),
   team: zod.string(),
   rating: zod.number(),
+  wins: zod.number().optional().default(0),
+  losses: zod.number().optional().default(0),
+  earnings: zod.number().optional().default(0),
+  paymentProvider: zod.string().nullish(),
+  paymentHandle: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -44,6 +49,8 @@ export const UpdateMeBody = zod.object({
   username: zod.string().optional(),
   team: zod.string().optional(),
   isPro: zod.boolean().optional(),
+  paymentProvider: zod.string().optional(),
+  paymentHandle: zod.string().optional(),
 });
 
 export const UpdateMeResponse = zod.object({
@@ -60,6 +67,11 @@ export const UpdateMeResponse = zod.object({
   totalGames: zod.number(),
   team: zod.string(),
   rating: zod.number(),
+  wins: zod.number().optional().default(0),
+  losses: zod.number().optional().default(0),
+  earnings: zod.number().optional().default(0),
+  paymentProvider: zod.string().nullish(),
+  paymentHandle: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -111,6 +123,10 @@ export const ListChallengesResponseItem = zod.object({
   isPro: zod.boolean(),
   timeAgo: zod.string(),
   createdAt: zod.coerce.date(),
+  acceptorId: zod.number().nullish(),
+  acceptorUsername: zod.string().nullish(),
+  winnerId: zod.number().nullish(),
+  completedAt: zod.coerce.date().nullish(),
 });
 export const ListChallengesResponse = zod.array(ListChallengesResponseItem);
 
@@ -139,6 +155,10 @@ export const ListMyChallengesResponseItem = zod.object({
   isPro: zod.boolean(),
   timeAgo: zod.string(),
   createdAt: zod.coerce.date(),
+  acceptorId: zod.number().nullish(),
+  acceptorUsername: zod.string().nullish(),
+  winnerId: zod.number().nullish(),
+  completedAt: zod.coerce.date().nullish(),
 });
 export const ListMyChallengesResponse = zod.array(ListMyChallengesResponseItem);
 

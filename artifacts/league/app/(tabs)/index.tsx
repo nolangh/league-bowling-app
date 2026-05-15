@@ -18,24 +18,40 @@ import { useColors } from "@/hooks/useColors";
 import { useApp, type Challenge } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { ChallengeCard } from "@/components/ChallengeCard";
-import { StakeModal } from "@/components/StakeModal";
+
+type Tab = "open" | "mine" | "accepted" | "history";
+
+const TAB_LABELS: Record<Tab, string> = {
+  open: "OPEN",
+  mine: "MY POSTS",
+  accepted: "ACTIVE",
+  history: "HISTORY",
+};
 
 export default function ChallengesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { challenges, myActiveChallenges, user, postChallenge, acceptChallenge } = useApp();
-  const [tab, setTab] = useState<"open" | "mine">("open");
-  const [stakeModalVisible, setStakeModalVisible] = useState(false);
+  const {
+    challenges, myActiveChallenges, acceptedChallenges, completedChallenges,
+    postChallenge, acceptChallenge, deleteChallenge, completeChallenge,
+  } = useApp();
+
+  const [tab, setTab] = useState<Tab>("open");
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [acceptModalVisible, setAcceptModalVisible] = useState(false);
+  const [resultModalVisible, setResultModalVisible] = useState(false);
   const [postScore, setPostScore] = useState("");
   const [postStake, setPostStake] = useState(25);
   const [postModalVisible, setPostModalVisible] = useState(false);
 
-  const handleAccept = (challenge: Challenge) => {
-    setSelectedChallenge(challenge);
-    setAcceptModalVisible(true);
+  const tabData: Record<Tab, Challenge[]> = {
+    open: challenges,
+    mine: myActiveChallenges,
+    accepted: acceptedChallenges,
+    history: completedChallenges,
   };
+
+  const handleAccept = (c: Challenge) => { setSelectedChallenge(c); setAcceptModalVisible(true); };
 
   const confirmAccept = () => {
     if (selectedChallenge) {
@@ -44,6 +60,22 @@ export default function ChallengesScreen() {
     }
     setAcceptModalVisible(false);
     setSelectedChallenge(null);
+  };
+
+  const handleMarkResult = (c: Challenge) => { setSelectedChallenge(c); setResultModalVisible(true); };
+
+  const confirmResult = async (result: "won" | "lost") => {
+    if (selectedChallenge) {
+      await completeChallenge(selectedChallenge.id, result);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setResultModalVisible(false);
+    setSelectedChallenge(null);
+  };
+
+  const handleDelete = (c: Challenge) => {
+    deleteChallenge(c.id);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const handlePost = () => {
@@ -59,8 +91,18 @@ export default function ChallengesScreen() {
 
   const STAKES = [10, 25, 50, 75, 100, 150, 200];
 
+  const EMPTY: Record<Tab, { icon: keyof typeof Feather.glyphMap; text: string }> = {
+    open: { icon: "zap-off", text: "No open challenges right now" },
+    mine: { icon: "target", text: "Post a challenge to get started" },
+    accepted: { icon: "activity", text: "Accept a challenge to see it here" },
+    history: { icon: "archive", text: "Completed challenges appear here" },
+  };
+
+  const currentList = tabData[tab];
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>CHALLENGES</Text>
@@ -78,55 +120,55 @@ export default function ChallengesScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
-        {(["open", "mine"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.tab, tab === t && styles.tabActive]}
-            onPress={() => setTab(t)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                { color: tab === t ? colors.foreground : colors.mutedForeground },
-              ]}
+      {/* Tab Row */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabScrollRow}
+        contentContainerStyle={[styles.tabScrollContent, { borderBottomColor: colors.border }]}
+      >
+        {(Object.keys(TAB_LABELS) as Tab[]).map((t) => {
+          const count = t !== "open" ? tabData[t].length : 0;
+          return (
+            <TouchableOpacity
+              key={t}
+              style={[styles.tab, tab === t && { borderBottomColor: colors.primary }]}
+              onPress={() => setTab(t)}
             >
-              {t === "open" ? "OPEN CHALLENGES" : "MY CHALLENGES"}
-            </Text>
-            {tab === t && (
-              <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text style={[styles.tabText, { color: tab === t ? colors.foreground : colors.mutedForeground }]}>
+                {TAB_LABELS[t]}
+              </Text>
+              {count > 0 && (
+                <View style={[styles.tabBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.tabBadgeText, { color: colors.primaryForeground }]}>{count}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
+      {/* List */}
       <ScrollView
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {tab === "open" ? (
-          challenges.length === 0 ? (
-            <View style={styles.empty}>
-              <Feather name="zap-off" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                No open challenges right now
-              </Text>
-            </View>
-          ) : (
-            challenges.map((c) => (
-              <ChallengeCard key={c.id} challenge={c} onAccept={() => handleAccept(c)} />
-            ))
-          )
-        ) : myActiveChallenges.length === 0 ? (
+        {currentList.length === 0 ? (
           <View style={styles.empty}>
-            <Feather name="target" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Post a challenge to get started
-            </Text>
+            <Feather name={EMPTY[tab].icon} size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{EMPTY[tab].text}</Text>
           </View>
         ) : (
-          myActiveChallenges.map((c) => (
-            <ChallengeCard key={c.id} challenge={c} isOwn />
+          currentList.map((c) => (
+            <ChallengeCard
+              key={c.id}
+              challenge={c}
+              onAccept={tab === "open" ? () => handleAccept(c) : undefined}
+              isOwn={tab === "mine"}
+              onDelete={tab === "mine" && c.status === "open" ? () => handleDelete(c) : undefined}
+              onMarkResult={tab === "accepted" ? () => handleMarkResult(c) : undefined}
+              result={tab === "history" ? c.result : undefined}
+            />
           ))
         )}
       </ScrollView>
@@ -138,9 +180,7 @@ export default function ChallengesScreen() {
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             {selectedChallenge && (
               <>
-                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-                  Accept Challenge?
-                </Text>
+                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Accept Challenge?</Text>
                 <View style={[styles.challengePreview, { backgroundColor: colors.secondary }]}>
                   <View style={[styles.avatar, { backgroundColor: selectedChallenge.avatarColor }]}>
                     <Text style={styles.avatarText}>{selectedChallenge.initials}</Text>
@@ -181,6 +221,62 @@ export default function ChallengesScreen() {
         </Pressable>
       </Modal>
 
+      {/* Mark Result Modal */}
+      <Modal visible={resultModalVisible} transparent animationType="slide">
+        <Pressable style={styles.overlay} onPress={() => setResultModalVisible(false)}>
+          <Pressable style={[styles.bottomSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Mark Result</Text>
+            {selectedChallenge && (
+              <>
+                <View style={[styles.challengePreview, { backgroundColor: colors.secondary }]}>
+                  <View style={[styles.avatar, { backgroundColor: selectedChallenge.avatarColor }]}>
+                    <Text style={styles.avatarText}>{selectedChallenge.initials}</Text>
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[styles.challengePreviewName, { color: colors.foreground }]}>
+                      vs {selectedChallenge.username}
+                    </Text>
+                    <Text style={[styles.stakeAmount, { color: colors.primary }]}>
+                      ${selectedChallenge.stake} stake
+                    </Text>
+                  </View>
+                  <Text style={[styles.challengePreviewScore, { color: colors.foreground }]}>
+                    {selectedChallenge.postedScore}
+                  </Text>
+                </View>
+                <Text style={[styles.sheetNote, { color: colors.mutedForeground }]}>
+                  Record your honest result. Stats and earnings update immediately.
+                </Text>
+                <View style={styles.resultBtns}>
+                  <TouchableOpacity
+                    style={[styles.resultBtn, { backgroundColor: "#22c55e" }]}
+                    onPress={() => confirmResult("won")}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="trending-up" size={20} color="#fff" />
+                    <Text style={styles.resultBtnText}>I WON</Text>
+                    <Text style={styles.resultBtnSub}>+${selectedChallenge.stake}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.resultBtn, { backgroundColor: "#ef4444" }]}
+                    onPress={() => confirmResult("lost")}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="trending-down" size={20} color="#fff" />
+                    <Text style={styles.resultBtnText}>I LOST</Text>
+                    <Text style={styles.resultBtnSub}>-${selectedChallenge.stake}</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity onPress={() => setResultModalVisible(false)} style={styles.cancelBtn}>
+                  <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Post Challenge Modal */}
       <Modal visible={postModalVisible} transparent animationType="slide">
         <Pressable style={styles.overlay} onPress={() => setPostModalVisible(false)}>
@@ -211,27 +307,18 @@ export default function ChallengesScreen() {
                   ]}
                   onPress={() => setPostStake(s)}
                 >
-                  <Text
-                    style={[
-                      styles.stakePillText,
-                      { color: postStake === s ? colors.primaryForeground : colors.foreground },
-                    ]}
-                  >
+                  <Text style={[styles.stakePillText, { color: postStake === s ? colors.primaryForeground : colors.foreground }]}>
                     ${s}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
             <TouchableOpacity
-              style={[
-                styles.confirmBtn,
-                {
-                  backgroundColor:
-                    postScore && parseInt(postScore) >= 100 && parseInt(postScore) <= 300
-                      ? colors.primary
-                      : colors.muted,
-                },
-              ]}
+              style={[styles.confirmBtn, {
+                backgroundColor:
+                  postScore && parseInt(postScore) >= 100 && parseInt(postScore) <= 300
+                    ? colors.primary : colors.muted,
+              }]}
               onPress={handlePost}
               activeOpacity={0.85}
             >
@@ -260,28 +347,25 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 34, fontFamily: "BarlowCondensed_800ExtraBold", letterSpacing: 2 },
   headerSub: { fontSize: 12, fontFamily: "DMSans_400Regular", marginTop: 2, letterSpacing: 0.3 },
-  postBtn: {
+  postBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 50 },
+  postBtnText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
+  tabScrollRow: { flexGrow: 0 },
+  tabScrollContent: { paddingHorizontal: 12, borderBottomWidth: 1 },
+  tab: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 50,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
-  postBtnText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
-  tabRow: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    marginBottom: 4,
-  },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 12, position: "relative" },
-  tabActive: {},
   tabText: { fontSize: 12, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 1 },
-  tabUnderline: { position: "absolute", bottom: 0, height: 2, left: 0, right: 0 },
+  tabBadge: { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, justifyContent: "center", alignItems: "center" },
+  tabBadgeText: { fontSize: 9, fontFamily: "BarlowCondensed_700Bold" },
   list: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
   empty: { alignItems: "center", paddingTop: 80, gap: 12 },
-  emptyText: { fontSize: 15, fontWeight: "500" },
+  emptyText: { fontSize: 15, fontFamily: "DMSans_500Medium" },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   bottomSheet: {
     borderTopLeftRadius: 28,
@@ -292,15 +376,9 @@ const styles = StyleSheet.create({
   },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 8 },
   sheetTitle: { fontSize: 24, fontFamily: "BarlowCondensed_800ExtraBold" },
-  challengePreview: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 16,
-    padding: 16,
-  },
+  challengePreview: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 16, padding: 16 },
   avatar: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
-  avatarText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  avatarText: { color: "#fff", fontFamily: "BarlowCondensed_700Bold", fontSize: 15 },
   challengePreviewName: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
   challengePreviewScore: { fontSize: 26, fontFamily: "BarlowCondensed_800ExtraBold" },
   stakeAmount: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
@@ -319,12 +397,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   stakePicker: { marginBottom: 4 },
-  stakePill: {
-    borderWidth: 1,
-    borderRadius: 50,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    marginRight: 8,
-  },
+  stakePill: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 18, paddingVertical: 10, marginRight: 8 },
   stakePillText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
+  resultBtns: { flexDirection: "row", gap: 12 },
+  resultBtn: { flex: 1, borderRadius: 16, padding: 18, alignItems: "center", gap: 6 },
+  resultBtnText: { fontSize: 20, fontFamily: "BarlowCondensed_800ExtraBold", color: "#fff" },
+  resultBtnSub: { fontSize: 13, fontFamily: "BarlowCondensed_600SemiBold", color: "rgba(255,255,255,0.85)" },
 });

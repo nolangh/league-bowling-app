@@ -22,6 +22,11 @@ export interface UserProfile {
   totalGames: number;
   team: string;
   rating: number;
+  wins: number;
+  losses: number;
+  earnings: number;
+  paymentProvider?: string;
+  paymentHandle?: string;
 }
 
 export interface Game {
@@ -44,7 +49,7 @@ export interface Challenge {
   stake: number;
   timeAgo: string;
   isPro: boolean;
-  status: "open" | "active" | "completed";
+  status: "open" | "active" | "completed" | "cancelled";
   initials: string;
   avatarColor: string;
   isOwn?: boolean;
@@ -52,6 +57,11 @@ export interface Challenge {
   matchesRequired?: number;
   matchesPlayed?: number;
   description?: string;
+  acceptorId?: number;
+  acceptorUsername?: string;
+  winnerId?: number;
+  completedAt?: string;
+  result?: "won" | "lost";
 }
 
 export interface Moment {
@@ -156,6 +166,7 @@ const FALLBACK_USER: UserProfile = {
   name: "Bowler", username: "BOWLER", rank: "Rookie",
   level: 1, xp: 0, xpToNext: 1000, isPro: false,
   careerAvg: 0, highGame: 0, totalGames: 0, team: "Solo", rating: 1000,
+  wins: 0, losses: 0, earnings: 0,
 };
 
 interface AppContextValue {
@@ -163,6 +174,8 @@ interface AppContextValue {
   games: Game[];
   challenges: Challenge[];
   myActiveChallenges: Challenge[];
+  acceptedChallenges: Challenge[];
+  completedChallenges: Challenge[];
   moments: Moment[];
   leagues: League[];
   loading: boolean;
@@ -174,7 +187,10 @@ interface AppContextValue {
   postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[]) => Promise<void>;
   acceptChallenge: (challengeId: string) => void;
   postChallenge: (score: number, stake: number) => void;
+  deleteChallenge: (challengeId: string) => Promise<void>;
+  completeChallenge: (challengeId: string, result: "won" | "lost") => Promise<void>;
   setUserPro: (isPro: boolean) => void;
+  updatePaymentInfo: (provider: string, handle: string) => Promise<void>;
   joinLeague: (leagueId: string) => void;
   refreshAll: () => Promise<void>;
   // Friends
@@ -193,6 +209,11 @@ type ApiChallenge = {
   id: number; username: string; rank: string; rankColor: string;
   postedScore: number; stake: number; timeAgo: string; isPro: boolean;
   status: string; initials: string; avatarColor: string;
+  acceptorId?: number | null;
+  acceptorUsername?: string | null;
+  winnerId?: number | null;
+  completedAt?: string | null;
+  result?: "won" | "lost";
 };
 type ApiMoment = {
   id: number; userId?: number; username: string; rank: string; rankColor: string;
@@ -211,11 +232,24 @@ type ApiUser = {
   level: number; xp: number; xpToNext: number; isPro: boolean;
   careerAvg: number; highGame: number; totalGames: number;
   team: string; rating: number;
+  wins: number; losses: number; earnings: number;
+  paymentProvider?: string | null;
+  paymentHandle?: string | null;
 };
 
 function toGame(g: ApiGame): Game { return { ...g, id: String(g.id) }; }
 function toChallenge(c: ApiChallenge): Challenge {
-  return { ...c, id: String(c.id), rank: c.rank as Rank, status: c.status as Challenge["status"] };
+  return {
+    ...c,
+    id: String(c.id),
+    rank: c.rank as Rank,
+    status: c.status as Challenge["status"],
+    acceptorId: c.acceptorId ?? undefined,
+    acceptorUsername: c.acceptorUsername ?? undefined,
+    winnerId: c.winnerId ?? undefined,
+    completedAt: c.completedAt ?? undefined,
+    result: c.result,
+  };
 }
 function toMoment(m: ApiMoment): Moment {
   return {
@@ -234,13 +268,25 @@ function toMoment(m: ApiMoment): Moment {
 function toLeague(l: ApiLeague): League {
   return { ...l, id: String(l.id), type: l.type as League["type"], weeklyChallenge: l.weeklyChallenge ?? undefined };
 }
-function toUser(u: ApiUser): UserProfile { return { ...u, rank: u.rank as Rank }; }
+function toUser(u: ApiUser): UserProfile {
+  return {
+    ...u,
+    rank: u.rank as Rank,
+    wins: u.wins ?? 0,
+    losses: u.losses ?? 0,
+    earnings: u.earnings ?? 0,
+    paymentProvider: u.paymentProvider ?? undefined,
+    paymentHandle: u.paymentHandle ?? undefined,
+  };
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile>(FALLBACK_USER);
   const [games, setGames] = useState<Game[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [myActiveChallenges, setMyActiveChallenges] = useState<Challenge[]>([]);
+  const [acceptedChallenges, setAcceptedChallenges] = useState<Challenge[]>([]);
+  const [completedChallenges, setCompletedChallenges] = useState<Challenge[]>([]);
   const [moments, setMoments] = useState<Moment[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
@@ -288,12 +334,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshAll() {
     try {
-      const [userRes, gamesRes, challengesRes, myChallRes, momentsRes, leaguesRes] =
+      const [userRes, gamesRes, challengesRes, myChallRes, acceptedChallRes, completedChallRes, momentsRes, leaguesRes] =
         await Promise.allSettled([
           api.get<ApiUser>("/users/me"),
           api.get<ApiGame[]>("/games"),
           api.get<ApiChallenge[]>("/challenges"),
           api.get<ApiChallenge[]>("/challenges/my"),
+          api.get<ApiChallenge[]>("/challenges/accepted"),
+          api.get<ApiChallenge[]>("/challenges/completed"),
           api.get<ApiMoment[]>("/moments"),
           api.get<ApiLeague[]>("/leagues"),
         ]);
@@ -302,6 +350,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (gamesRes.status === "fulfilled") setGames(gamesRes.value.map(toGame));
       if (challengesRes.status === "fulfilled") setChallenges(challengesRes.value.map(toChallenge));
       if (myChallRes.status === "fulfilled") setMyActiveChallenges(myChallRes.value.map(toChallenge));
+      if (acceptedChallRes.status === "fulfilled") setAcceptedChallenges(acceptedChallRes.value.map(toChallenge));
+      if (completedChallRes.status === "fulfilled") setCompletedChallenges(completedChallRes.value.map(toChallenge));
       if (momentsRes.status === "fulfilled") setMoments(momentsRes.value.map(toMoment));
       if (leaguesRes.status === "fulfilled") setLeagues(leaguesRes.value.map(toLeague));
     } catch {
@@ -319,7 +369,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toggleLikeMoment = async (momentId: string) => {
     const current = moments.find((m) => m.id === momentId);
     if (!current) return;
-    // Optimistic
     setMoments((prev) =>
       prev.map((m) =>
         m.id === momentId
@@ -436,10 +485,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteChallenge = async (challengeId: string) => {
+    setMyActiveChallenges((prev) => prev.filter((c) => c.id !== challengeId));
+    try {
+      await api.delete(`/challenges/${challengeId}`);
+    } catch {
+      // If delete fails, re-fetch to restore
+      const refreshed = await api.get<ApiChallenge[]>("/challenges/my");
+      setMyActiveChallenges(refreshed.map(toChallenge));
+    }
+  };
+
+  const completeChallenge = async (challengeId: string, result: "won" | "lost") => {
+    try {
+      const completed = await api.post<ApiChallenge>(`/challenges/${challengeId}/complete`, { result });
+      setAcceptedChallenges((prev) => prev.filter((c) => c.id !== challengeId));
+      setCompletedChallenges((prev) => [toChallenge(completed), ...prev]);
+      const updatedUser = await api.get<ApiUser>("/users/me");
+      setUser(toUser(updatedUser));
+    } catch { /* ignore */ }
+  };
+
   const setUserPro = async (isPro: boolean) => {
     setUser((prev) => ({ ...prev, isPro }));
     try {
       const updated = await api.patch<ApiUser>("/users/me", { isPro });
+      setUser(toUser(updated));
+    } catch { /* keep optimistic */ }
+  };
+
+  const updatePaymentInfo = async (provider: string, handle: string) => {
+    setUser((prev) => ({ ...prev, paymentProvider: provider, paymentHandle: handle }));
+    try {
+      const updated = await api.patch<ApiUser>("/users/me", { paymentProvider: provider, paymentHandle: handle });
       setUser(toUser(updated));
     } catch { /* keep optimistic */ }
   };
@@ -465,9 +543,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      user, games, challenges, myActiveChallenges, moments, leagues, loading,
+      user, games, challenges, myActiveChallenges, acceptedChallenges, completedChallenges,
+      moments, leagues, loading,
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
-      acceptChallenge, postChallenge, setUserPro, joinLeague, refreshAll,
+      acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
+      setUserPro, updatePaymentInfo, joinLeague, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,
     }}>
       {children}

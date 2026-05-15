@@ -90,6 +90,11 @@ function mapUser(row: Record<string, unknown>) {
     totalGames: row.total_games,
     team: row.team,
     rating: row.rating,
+    wins: row.wins ?? 0,
+    losses: row.losses ?? 0,
+    earnings: parseFloat(String(row.earnings ?? 0)),
+    paymentProvider: row.payment_provider ?? null,
+    paymentHandle: row.payment_handle ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -103,6 +108,8 @@ function toSnake(obj: Record<string, unknown>): Record<string, unknown> {
     careerAvg: "career_avg",
     highGame: "high_game",
     totalGames: "total_games",
+    paymentProvider: "payment_provider",
+    paymentHandle: "payment_handle",
   };
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
