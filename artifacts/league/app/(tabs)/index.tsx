@@ -10,7 +10,7 @@ import {
   Pressable,
   Platform,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
@@ -102,8 +102,9 @@ export default function ChallengesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: 12, backgroundColor: colors.background }]}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>CHALLENGES</Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>

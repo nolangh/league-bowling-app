@@ -10,7 +10,7 @@ import {
   Platform,
   TextInput,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -108,12 +108,13 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header Hero */}
-        <View style={[styles.heroSection, { paddingTop: insets.top + 20 }]}>
+        <View style={[styles.heroSection, { paddingTop: 20 }]}>
           <View style={[styles.avatarLarge, { backgroundColor: "#1a3c2a" }]}>
             <Text style={styles.avatarLargeText}>
               {user.name.split(" ").map((n) => n[0]).join("")}
