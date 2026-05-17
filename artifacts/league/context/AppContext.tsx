@@ -436,6 +436,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   function setupRealtime() {
+    // Guard against React StrictMode double-mount: remove any existing channel
+    // with this topic before subscribing, otherwise Supabase throws.
+    const existing = supabase.getChannels().find((c) => c.topic === "realtime:moments-realtime");
+    if (existing) supabase.removeChannel(existing);
+
     const channel = supabase
       .channel("moments-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "moments" }, (payload) => {
