@@ -319,7 +319,6 @@ export default function ProfileScreen() {
         <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
           {[
             { icon: "users" as const, label: "Friends", href: "/friends" as const },
-            { icon: "bookmark" as const, label: "Saved Posts", href: null },
             { icon: "shield" as const, label: "Security & Account", href: "/account-security" as const },
           ].map((item, i, arr) => (
             <TouchableOpacity

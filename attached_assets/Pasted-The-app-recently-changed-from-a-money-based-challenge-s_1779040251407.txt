@@ -1,0 +1,34 @@
+The app recently changed from a money-based challenge system to a ranked system using BSR (Bowling Skill Rating) + Elo updates. The backend routes have been updated, but other parts of the code are still inconsistent with this change.
+
+Please analyze the current state of the codebase and do the following:
+
+**1. Fix Technical Debt First (Highest Priority)**
+- Update the Drizzle schema (`lib/db/src/schema/challenges.ts`) to match the current BSR system. Remove the `stake` field and add the missing BSR-related columns that the routes are already using (such as `poster_bsr`, `acceptor_bsr`, `winner_bsr_change`, `loser_bsr_change`, etc.).
+- Update the OpenAPI spec so it no longer references money/stakes and reflects the new ranked/BSR model.
+- Update the README to remove all references to money challenges and stakes.
+- After updating the schema, tell me what migrations or codegen steps are needed next.
+
+**2. Security Hardening**
+- Tighten CORS configuration (currently wide open).
+- Add rate limiting.
+- Add Helmet for security headers.
+- Review the current auth middleware and routes for any other security gaps.
+
+**3. Feature Additions (Prioritized)**
+High priority:
+- Add push notifications using Expo Notifications.
+- Add real-time updates using Supabase Realtime (for the social feed and challenge status).
+
+Medium priority:
+- Build a simple dispute/moderation flow for challenges.
+- Add search functionality (for players, leagues, and moments).
+- Improve first-time user onboarding (explain ranks and BSR).
+- Add account deletion and basic privacy features.
+- Create an in-app activity/notifications center.
+
+**Instructions:**
+- Start by giving me a clear, prioritized plan.
+- Then begin implementing the highest priority items (schema sync + OpenAPI cleanup first).
+- Explain your changes as you go.
+- After making changes, tell me what still needs to be done manually (migrations, regenerating clients, testing, etc.).
+- Be practical and focus on making the ranked system consistent and reliable.

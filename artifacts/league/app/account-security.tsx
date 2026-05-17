@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Switch, Alert, ActivityIndicator, Platform,
+  Modal, Pressable, KeyboardAvoidingView,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,7 +17,7 @@ export default function AccountSecurityScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
-    user, session,
+    user, session, signOut,
     biometricAvailable, biometricEnabled, biometricType,
     mfaEnabled,
     enableBiometric, disableBiometric,
@@ -24,6 +25,11 @@ export default function AccountSecurityScreen() {
     enrollMFA, verifyMFAEnrollment, unenrollMFA,
     refreshMFAState,
   } = useAuth();
+
+  const [bioModalVisible, setBioModalVisible] = useState(false);
+  const [bioPassword, setBioPassword] = useState("");
+  const [bioStep, setBioStep] = useState<"password" | "verifying" | "success">("password");
+  const [bioError, setBioError] = useState("");
 
   const [open, setOpen] = useState<Section>(null);
   const [loading, setLoading] = useState(false);
@@ -127,23 +133,59 @@ export default function AccountSecurityScreen() {
     );
   };
 
-  const handleBiometricToggle = async (val: boolean) => {
+  const handleBiometricToggle = (val: boolean) => {
     if (val) {
-      const email = user?.email ?? "";
-      Alert.prompt(
-        "Enable Biometric Login",
-        "Enter your current password to enable biometric login.",
-        async (password: string) => {
-          if (!password) return;
-          try { await enableBiometric(email, password); }
-          catch (e: any) { Alert.alert("Error", e.message ?? "Could not enable biometric login."); }
-        },
-        "secure-text"
-      );
+      setBioPassword(""); setBioError(""); setBioStep("password");
+      setBioModalVisible(true);
     } else {
-      try { await disableBiometric(); }
-      catch (e: any) { Alert.alert("Error", e.message ?? "Could not disable biometric login."); }
+      Alert.alert(
+        "Disable Biometric Login",
+        "You'll need to use your password to sign in next time. Continue?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Disable", style: "destructive",
+            onPress: async () => {
+              try { await disableBiometric(); }
+              catch (e: any) { Alert.alert("Error", e.message ?? "Could not disable biometric login."); }
+            },
+          },
+        ]
+      );
     }
+  };
+
+  const handleConfirmBiometric = async () => {
+    const email = user?.email ?? "";
+    if (!bioPassword) { setBioError("Enter your current password."); return; }
+    if (!email) { setBioError("No email on file for this account."); return; }
+    setBioStep("verifying"); setBioError("");
+    try {
+      await enableBiometric(email, bioPassword);
+      setBioStep("success");
+      setBioPassword("");
+      setTimeout(() => setBioModalVisible(false), 1400);
+    } catch (e: any) {
+      setBioError(e.message ?? "Could not enable biometric login.");
+      setBioStep("password");
+    }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out of League?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out", style: "destructive",
+          onPress: async () => {
+            try { await signOut(); router.replace("/auth/sign-in"); }
+            catch (e: any) { Alert.alert("Error", e.message ?? "Could not sign out."); }
+          },
+        },
+      ]
+    );
   };
 
   const qrSvgXml = React.useMemo(() => {
@@ -333,14 +375,14 @@ export default function AccountSecurityScreen() {
             <View style={[styles.card, { backgroundColor: colors.card }]}>
               <View style={[styles.settingsRow, { borderBottomColor: "transparent" }]}>
                 <View style={[styles.rowIcon, { backgroundColor: colors.primary + "20" }]}>
-                  <Feather name={biometricType === "face" ? "aperture" : "fingerprint" as any} size={17} color={colors.primary} />
+                  <Feather name={biometricType === "face" ? "aperture" : ("fingerprint" as any)} size={17} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>
                     {biometricType === "face" ? "Face ID" : "Fingerprint"}
                   </Text>
                   <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>
-                    {biometricEnabled ? "Enabled" : "Sign in without your password"}
+                    {biometricEnabled ? "Enabled — sign in without your password" : "Tap to set up quick sign-in"}
                   </Text>
                 </View>
                 <Switch
@@ -353,7 +395,98 @@ export default function AccountSecurityScreen() {
             </View>
           </>
         )}
+
+        <Text style={[styles.section, { color: colors.mutedForeground }]}>SESSION</Text>
+        <TouchableOpacity
+          style={[styles.signOutBtn, { backgroundColor: "#ef4444" + "15", borderColor: "#ef4444" + "40" }]}
+          onPress={handleSignOut}
+          activeOpacity={0.7}
+        >
+          <Feather name="log-out" size={17} color="#ef4444" />
+          <Text style={[styles.signOutText, { color: "#ef4444" }]}>Sign Out</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <Modal visible={bioModalVisible} transparent animationType="slide" onRequestClose={() => setBioModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          <Pressable
+            style={styles.bioOverlay}
+            onPress={() => bioStep !== "verifying" && setBioModalVisible(false)}
+          >
+            <Pressable style={[styles.bioSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
+              <View style={[styles.bioHandle, { backgroundColor: colors.border }]} />
+
+              {bioStep === "success" ? (
+                <View style={styles.bioSuccess}>
+                  <View style={[styles.bioIconBig, { backgroundColor: colors.primary + "25" }]}>
+                    <Feather name="check" size={32} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.bioTitle, { color: colors.foreground }]}>You're all set</Text>
+                  <Text style={[styles.bioBody, { color: colors.mutedForeground }]}>
+                    Next time you open League, you can sign in with {biometricType === "face" ? "Face ID" : "your fingerprint"}.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View style={[styles.bioIconBig, { backgroundColor: colors.primary + "25", alignSelf: "center" }]}>
+                    <Feather name={biometricType === "face" ? "aperture" : ("fingerprint" as any)} size={32} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.bioTitle, { color: colors.foreground, textAlign: "center" }]}>
+                    Enable {biometricType === "face" ? "Face ID" : "Fingerprint"}
+                  </Text>
+                  <Text style={[styles.bioBody, { color: colors.mutedForeground, textAlign: "center" }]}>
+                    Confirm your current password. We'll securely store your sign-in so you can use {biometricType === "face" ? "Face ID" : "your fingerprint"} next time.
+                  </Text>
+
+                  <View style={[styles.bioEmailRow, { backgroundColor: colors.secondary }]}>
+                    <Feather name="mail" size={14} color={colors.mutedForeground} />
+                    <Text style={[styles.bioEmailText, { color: colors.foreground }]} numberOfLines={1}>
+                      {user?.email ?? "your account"}
+                    </Text>
+                  </View>
+
+                  <TextInput
+                    style={[styles.input, { borderColor: bioError ? "#ef4444" : colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                    placeholder="Current password"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={bioPassword}
+                    onChangeText={(t) => { setBioPassword(t); setBioError(""); }}
+                    secureTextEntry
+                    autoFocus
+                    editable={bioStep !== "verifying"}
+                  />
+
+                  {!!bioError && (
+                    <View style={[styles.bioErrorRow]}>
+                      <Feather name="alert-circle" size={13} color="#ef4444" />
+                      <Text style={[styles.bioErrorText, { color: "#ef4444" }]}>{bioError}</Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: colors.primary, opacity: bioStep === "verifying" ? 0.7 : 1 }]}
+                    onPress={handleConfirmBiometric}
+                    disabled={bioStep === "verifying"}
+                    activeOpacity={0.85}
+                  >
+                    {bioStep === "verifying" ? (
+                      <ActivityIndicator color={colors.primaryForeground} size="small" />
+                    ) : (
+                      <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>
+                        Enable {biometricType === "face" ? "Face ID" : "Fingerprint"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setBioModalVisible(false)} disabled={bioStep === "verifying"} style={{ paddingVertical: 6 }}>
+                    <Text style={[styles.bioCancelText, { color: colors.mutedForeground }]}>Not now</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -388,4 +521,24 @@ const styles = StyleSheet.create({
   secretText: { fontSize: 14, fontFamily: "DMSans_500Medium", letterSpacing: 2, textAlign: "center" },
   banner: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 12, marginBottom: 4 },
   bannerText: { flex: 1, fontSize: 13, fontFamily: "DMSans_400Regular" },
+  signOutBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 16, borderRadius: 20, borderWidth: 1,
+  },
+  signOutText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold", letterSpacing: 0.8 },
+  bioOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+  bioSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, gap: 14 },
+  bioHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 8 },
+  bioIconBig: { width: 72, height: 72, borderRadius: 36, justifyContent: "center", alignItems: "center" },
+  bioTitle: { fontSize: 22, fontFamily: "BarlowCondensed_800ExtraBold", letterSpacing: 0.5 },
+  bioBody: { fontSize: 14, fontFamily: "DMSans_400Regular", lineHeight: 21 },
+  bioEmailRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, marginTop: 4,
+  },
+  bioEmailText: { flex: 1, fontSize: 14, fontFamily: "DMSans_500Medium" },
+  bioErrorRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 2 },
+  bioErrorText: { fontSize: 13, fontFamily: "DMSans_500Medium", flex: 1 },
+  bioCancelText: { fontSize: 14, fontFamily: "DMSans_500Medium", textAlign: "center" },
+  bioSuccess: { alignItems: "center", gap: 14, paddingVertical: 8 },
 });

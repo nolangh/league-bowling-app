@@ -22,7 +22,7 @@ import { useApp, type Moment, type Friend } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { api } from "@/lib/api";
 
-type FilterKey = "all" | "game" | "challenge" | "advice";
+type FilterKey = "all" | "saved" | "game" | "challenge" | "advice";
 
 const TYPE_ICONS: Record<string, string> = {
   strike: "zap", game: "activity", challenge: "dollar-sign", advice: "message-circle",
@@ -472,10 +472,11 @@ export default function MomentsScreen() {
   const clearTag = () => setActiveTag(null);
 
   const typeFilters = [
-    { key: "all" as FilterKey, label: "ALL" },
-    { key: "game" as FilterKey, label: "GAMES" },
-    { key: "challenge" as FilterKey, label: "CHALLENGES" },
-    { key: "advice" as FilterKey, label: "TIPS" },
+    { key: "all" as FilterKey, label: "ALL", icon: null },
+    { key: "saved" as FilterKey, label: "SAVED", icon: "bookmark" as const },
+    { key: "game" as FilterKey, label: "GAMES", icon: null },
+    { key: "challenge" as FilterKey, label: "CHALLENGES", icon: null },
+    { key: "advice" as FilterKey, label: "TIPS", icon: null },
   ];
 
   const displayMoments = searchText.trim()
@@ -484,6 +485,8 @@ export default function MomentsScreen() {
     ? moments.filter((m) => m.tags.includes(activeTag))
     : filter === "all"
     ? moments
+    : filter === "saved"
+    ? moments.filter((m) => m.saved)
     : moments.filter((m) => m.type === filter || (filter === "game" && m.type === "strike"));
 
   return (
@@ -556,20 +559,27 @@ export default function MomentsScreen() {
 
       {!showSearch && !activeTag && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
-          {typeFilters.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.filterPill, {
-                backgroundColor: filter === f.key ? colors.foreground : colors.card,
-                borderColor: filter === f.key ? colors.foreground : colors.border,
-              }]}
-              onPress={() => setFilter(f.key)}
-            >
-              <Text style={[styles.filterText, { color: filter === f.key ? colors.background : colors.mutedForeground }]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {typeFilters.map((f) => {
+            const active = filter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterPill, {
+                  flexDirection: "row", alignItems: "center", gap: 5,
+                  backgroundColor: active ? colors.foreground : colors.card,
+                  borderColor: active ? colors.foreground : colors.border,
+                }]}
+                onPress={() => setFilter(f.key)}
+              >
+                {f.icon && (
+                  <Feather name={f.icon} size={11} color={active ? colors.background : colors.mutedForeground} />
+                )}
+                <Text style={[styles.filterText, { color: active ? colors.background : colors.mutedForeground }]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -582,6 +592,15 @@ export default function MomentsScreen() {
         )}
         {!searching && displayMoments.length === 0 && (searchText || activeTag) && (
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No posts found</Text>
+        )}
+        {!searching && displayMoments.length === 0 && !searchText && !activeTag && filter === "saved" && (
+          <View style={{ alignItems: "center", paddingTop: 60, gap: 8 }}>
+            <Feather name="bookmark" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.foreground, paddingTop: 4 }]}>No saved posts yet</Text>
+            <Text style={[{ color: colors.mutedForeground, fontSize: 13, textAlign: "center", paddingHorizontal: 40 }]}>
+              Tap the bookmark on any post to save it here.
+            </Text>
+          </View>
         )}
         {displayMoments.map((m) => (
           <MomentCard
