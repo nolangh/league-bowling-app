@@ -8,6 +8,8 @@ import {
   Modal,
   Pressable,
   Platform,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -23,11 +25,21 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, games, setUserPro } = useApp();
+  const { user, games, setUserPro, updateSpecs } = useApp();
   const { isSubscribed, offerings, purchase, isPurchasing, restore, isRestoring, isConfigured } = useSubscription();
 
   const [proModalVisible, setProModalVisible] = useState(false);
   const [purchaseConfirmVisible, setPurchaseConfirmVisible] = useState(false);
+  const [specsModalVisible, setSpecsModalVisible] = useState(false);
+  const [draftRevRate, setDraftRevRate] = useState("");
+  const [draftBallSpeed, setDraftBallSpeed] = useState("");
+  const [draftAxisTilt, setDraftAxisTilt] = useState("");
+  const [draftAxisRotation, setDraftAxisRotation] = useState("");
+  const [draftPapOver, setDraftPapOver] = useState("");
+  const [draftPapUp, setDraftPapUp] = useState("");
+  const [draftRelease, setDraftRelease] = useState("");
+  const [draftGrip, setDraftGrip] = useState("");
+  const [draftHand, setDraftHand] = useState("");
 
   const rankColor = getRankColor(user.rank);
   const xpPct = user.xp / user.xpToNext;
@@ -68,6 +80,35 @@ export default function ProfileScreen() {
       await restore();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
+  };
+
+  const openSpecsModal = () => {
+    setDraftRevRate(user.revRate != null ? String(user.revRate) : "");
+    setDraftBallSpeed(user.ballSpeed != null ? String(user.ballSpeed) : "");
+    setDraftAxisTilt(user.axisTilt != null ? String(user.axisTilt) : "");
+    setDraftAxisRotation(user.axisRotation != null ? String(user.axisRotation) : "");
+    setDraftPapOver(user.papOver ?? "");
+    setDraftPapUp(user.papUp ?? "");
+    setDraftRelease(user.releaseStyle ?? "");
+    setDraftGrip(user.gripStyle ?? "");
+    setDraftHand(user.dominantHand ?? "");
+    setSpecsModalVisible(true);
+  };
+
+  const saveSpecs = async () => {
+    await updateSpecs({
+      revRate:      draftRevRate      ? parseInt(draftRevRate, 10)        : null,
+      ballSpeed:    draftBallSpeed    ? parseFloat(draftBallSpeed)         : null,
+      axisTilt:     draftAxisTilt     ? parseInt(draftAxisTilt, 10)        : null,
+      axisRotation: draftAxisRotation ? parseInt(draftAxisRotation, 10)    : null,
+      papOver:      draftPapOver.trim()  || null,
+      papUp:        draftPapUp.trim()    || null,
+      releaseStyle: draftRelease        || null,
+      gripStyle:    draftGrip           || null,
+      dominantHand: draftHand           || null,
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSpecsModalVisible(false);
   };
 
   const STATS = [
@@ -201,6 +242,79 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* Bowling Specs */}
+        <TouchableOpacity
+          style={[styles.specsCard, { backgroundColor: colors.card }]}
+          onPress={openSpecsModal}
+          activeOpacity={0.85}
+        >
+          <View style={styles.specsCardHeader}>
+            <View style={styles.specsCardTitleRow}>
+              <View style={[styles.specsIconBox, { backgroundColor: colors.primary + "22" }]}>
+                <Feather name="activity" size={16} color={colors.primary} />
+              </View>
+              <Text style={[styles.specsCardTitle, { color: colors.foreground }]}>My Bowling Specs</Text>
+            </View>
+            <Feather name="edit-2" size={15} color={colors.mutedForeground} />
+          </View>
+          {(user.revRate || user.ballSpeed || user.axisTilt || user.axisRotation || user.papOver || user.releaseStyle) ? (
+            <View style={styles.specsGrid}>
+              {user.revRate != null && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.revRate}</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>rev/min</Text>
+                </View>
+              )}
+              {user.ballSpeed != null && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.ballSpeed}</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>mph</Text>
+                </View>
+              )}
+              {user.axisTilt != null && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.axisTilt}°</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>tilt</Text>
+                </View>
+              )}
+              {user.axisRotation != null && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.axisRotation}°</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>rotation</Text>
+                </View>
+              )}
+              {user.papOver && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.papOver}{user.papUp ? ` × ${user.papUp}` : ""}</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>PAP</Text>
+                </View>
+              )}
+              {user.releaseStyle && (
+                <View style={[styles.specsChip, { backgroundColor: colors.primary + "22" }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.primary }]}>{user.releaseStyle}</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.primary + "99" }]}>release</Text>
+                </View>
+              )}
+              {user.gripStyle && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.gripStyle}</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>grip</Text>
+                </View>
+              )}
+              {user.dominantHand && (
+                <View style={[styles.specsChip, { backgroundColor: colors.secondary }]}>
+                  <Text style={[styles.specsChipVal, { color: colors.foreground }]}>{user.dominantHand}</Text>
+                  <Text style={[styles.specsChipLabel, { color: colors.mutedForeground }]}>hand</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <Text style={[styles.specsEmpty, { color: colors.mutedForeground }]}>
+              Tap to add your rev rate, PAP, axis tilt and more — useful for drilling balls.
+            </Text>
+          )}
+        </TouchableOpacity>
+
         {/* Friends & Social */}
         <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
           {[
@@ -309,6 +423,162 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
+      {/* Bowling Specs Edit Modal */}
+      <Modal visible={specsModalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          <Pressable style={styles.overlay} onPress={() => setSpecsModalVisible(false)}>
+            <Pressable style={[styles.specsSheet, { backgroundColor: colors.card }]}>
+              <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Bowling Specs</Text>
+              <Text style={[styles.sheetNote, { color: colors.mutedForeground }]}>
+                These are private to you — handy for drilling new balls or sharing with your pro shop.
+              </Text>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 8 }}>
+                {/* Dominant Hand */}
+                <View style={styles.specGroup}>
+                  <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>DOMINANT HAND</Text>
+                  <View style={styles.pillRow}>
+                    {["Right", "Left"].map((h) => (
+                      <TouchableOpacity
+                        key={h}
+                        style={[styles.specPill, { backgroundColor: draftHand === h ? colors.primary : colors.secondary, borderColor: draftHand === h ? colors.primary : colors.border }]}
+                        onPress={() => setDraftHand(h)}
+                      >
+                        <Text style={[styles.specPillText, { color: draftHand === h ? colors.primaryForeground : colors.foreground }]}>{h}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Release Style */}
+                <View style={styles.specGroup}>
+                  <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>RELEASE STYLE</Text>
+                  <View style={styles.pillRow}>
+                    {["Stroker", "Tweener", "Cranker", "Two-Handed"].map((r) => (
+                      <TouchableOpacity
+                        key={r}
+                        style={[styles.specPill, { backgroundColor: draftRelease === r ? colors.primary : colors.secondary, borderColor: draftRelease === r ? colors.primary : colors.border }]}
+                        onPress={() => setDraftRelease(r)}
+                      >
+                        <Text style={[styles.specPillText, { color: draftRelease === r ? colors.primaryForeground : colors.foreground }]}>{r}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Grip Style */}
+                <View style={styles.specGroup}>
+                  <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>GRIP STYLE</Text>
+                  <View style={styles.pillRow}>
+                    {["Fingertip", "Conventional", "Sarge Easter"].map((g) => (
+                      <TouchableOpacity
+                        key={g}
+                        style={[styles.specPill, { backgroundColor: draftGrip === g ? colors.primary : colors.secondary, borderColor: draftGrip === g ? colors.primary : colors.border }]}
+                        onPress={() => setDraftGrip(g)}
+                      >
+                        <Text style={[styles.specPillText, { color: draftGrip === g ? colors.primaryForeground : colors.foreground }]}>{g}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Numbers row: Rev Rate + Ball Speed */}
+                <View style={styles.specNumRow}>
+                  <View style={[styles.specNumBlock, { flex: 1 }]}>
+                    <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>REV RATE (rpm)</Text>
+                    <TextInput
+                      style={[styles.specInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                      placeholder="e.g. 320"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={draftRevRate}
+                      onChangeText={setDraftRevRate}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={[styles.specNumBlock, { flex: 1 }]}>
+                    <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>BALL SPEED (mph)</Text>
+                    <TextInput
+                      style={[styles.specInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                      placeholder="e.g. 17.5"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={draftBallSpeed}
+                      onChangeText={setDraftBallSpeed}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* Numbers row: Axis Tilt + Axis Rotation */}
+                <View style={styles.specNumRow}>
+                  <View style={[styles.specNumBlock, { flex: 1 }]}>
+                    <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>AXIS TILT (°)</Text>
+                    <TextInput
+                      style={[styles.specInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                      placeholder="e.g. 15"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={draftAxisTilt}
+                      onChangeText={setDraftAxisTilt}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={[styles.specNumBlock, { flex: 1 }]}>
+                    <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>AXIS ROTATION (°)</Text>
+                    <TextInput
+                      style={[styles.specInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                      placeholder="e.g. 45"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={draftAxisRotation}
+                      onChangeText={setDraftAxisRotation}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                {/* PAP */}
+                <View style={styles.specGroup}>
+                  <Text style={[styles.specGroupLabel, { color: colors.mutedForeground }]}>POSITIVE AXIS POINT (PAP)</Text>
+                  <View style={styles.specNumRow}>
+                    <View style={[styles.specNumBlock, { flex: 1 }]}>
+                      <Text style={[styles.specGroupLabel, { color: colors.mutedForeground, fontSize: 9 }]}>OVER</Text>
+                      <TextInput
+                        style={[styles.specInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                        placeholder='e.g. 4 5/8"'
+                        placeholderTextColor={colors.mutedForeground}
+                        value={draftPapOver}
+                        onChangeText={setDraftPapOver}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    <View style={[styles.specNumBlock, { flex: 1 }]}>
+                      <Text style={[styles.specGroupLabel, { color: colors.mutedForeground, fontSize: 9 }]}>UP</Text>
+                      <TextInput
+                        style={[styles.specInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                        placeholder='e.g. 5/8"'
+                        placeholderTextColor={colors.mutedForeground}
+                        value={draftPapUp}
+                        onChangeText={setDraftPapUp}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: colors.primary, marginTop: 16 }]}
+                onPress={saveSpecs}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>Save Specs</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSpecsModalVisible(false)} style={styles.cancelBtn}>
+                <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -427,4 +697,39 @@ const styles = StyleSheet.create({
   confirmCancelText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
   confirmOkBtn: { flex: 1, borderRadius: 50, paddingVertical: 14, alignItems: "center" },
   confirmOkText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
+  // Bowling Specs card
+  specsCard: { borderRadius: 16, padding: 16, gap: 12 },
+  specsCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  specsCardTitleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  specsIconBox: { width: 32, height: 32, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  specsCardTitle: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
+  specsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  specsChip: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center", minWidth: 64 },
+  specsChipVal: { fontSize: 18, fontFamily: "BarlowCondensed_800ExtraBold" },
+  specsChipLabel: { fontSize: 9, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.5 },
+  specsEmpty: { fontSize: 13, fontFamily: "DMSans_400Regular", lineHeight: 18 },
+  // Bowling Specs modal
+  specsSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+    gap: 14,
+    maxHeight: "90%",
+  },
+  specGroup: { gap: 8 },
+  specGroupLabel: { fontSize: 11, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 1 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  specPill: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 16, paddingVertical: 9 },
+  specPillText: { fontSize: 14, fontFamily: "BarlowCondensed_600SemiBold" },
+  specNumRow: { flexDirection: "row", gap: 10 },
+  specNumBlock: { gap: 6 },
+  specInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: "DMSans_500Medium",
+  },
 });

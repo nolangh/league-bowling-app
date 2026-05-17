@@ -25,6 +25,16 @@ export interface UserProfile {
   bsr: number;
   wins: number;
   losses: number;
+  // Bowling specs
+  revRate?: number | null;
+  ballSpeed?: number | null;
+  axisTilt?: number | null;
+  axisRotation?: number | null;
+  papOver?: string | null;
+  papUp?: string | null;
+  releaseStyle?: string | null;
+  gripStyle?: string | null;
+  dominantHand?: string | null;
 }
 
 export interface Game {
@@ -189,6 +199,7 @@ interface AppContextValue {
   deleteChallenge: (challengeId: string) => Promise<void>;
   completeChallenge: (challengeId: string, acceptorScore: number) => Promise<{ result: "won" | "lost"; bsrChange: number } | null>;
   setUserPro: (isPro: boolean) => void;
+  updateSpecs: (specs: Partial<Pick<UserProfile, "revRate"|"ballSpeed"|"axisTilt"|"axisRotation"|"papOver"|"papUp"|"releaseStyle"|"gripStyle"|"dominantHand">>) => Promise<void>;
   joinLeague: (leagueId: string) => void;
   refreshAll: () => Promise<void>;
   sendFriendRequest: (userId: number) => Promise<void>;
@@ -232,6 +243,15 @@ type ApiUser = {
   level: number; xp: number; xpToNext: number; isPro: boolean;
   careerAvg: number; highGame: number; totalGames: number;
   team: string; bsr: number; wins: number; losses: number;
+  revRate?: number | null;
+  ballSpeed?: number | null;
+  axisTilt?: number | null;
+  axisRotation?: number | null;
+  papOver?: string | null;
+  papUp?: string | null;
+  releaseStyle?: string | null;
+  gripStyle?: string | null;
+  dominantHand?: string | null;
 };
 
 function toGame(g: ApiGame): Game { return { ...g, id: String(g.id) }; }
@@ -279,10 +299,19 @@ function toLeague(l: ApiLeague): League {
 function toUser(u: ApiUser): UserProfile {
   return {
     ...u,
-    rank:  u.rank as Rank,
-    bsr:   u.bsr ?? 1200,
-    wins:  u.wins ?? 0,
-    losses: u.losses ?? 0,
+    rank:         u.rank as Rank,
+    bsr:          u.bsr ?? 1200,
+    wins:         u.wins ?? 0,
+    losses:       u.losses ?? 0,
+    revRate:      u.revRate ?? null,
+    ballSpeed:    u.ballSpeed ?? null,
+    axisTilt:     u.axisTilt ?? null,
+    axisRotation: u.axisRotation ?? null,
+    papOver:      u.papOver ?? null,
+    papUp:        u.papUp ?? null,
+    releaseStyle: u.releaseStyle ?? null,
+    gripStyle:    u.gripStyle ?? null,
+    dominantHand: u.dominantHand ?? null,
   };
 }
 
@@ -519,6 +548,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* keep optimistic */ }
   };
 
+  const updateSpecs = async (specs: Partial<Pick<UserProfile, "revRate"|"ballSpeed"|"axisTilt"|"axisRotation"|"papOver"|"papUp"|"releaseStyle"|"gripStyle"|"dominantHand">>) => {
+    setUser((prev) => ({ ...prev, ...specs }));
+    try {
+      const updated = await api.patch<ApiUser>("/users/me", specs);
+      setUser(toUser(updated));
+    } catch { /* keep optimistic */ }
+  };
+
   const joinLeague = async (leagueId: string) => {
     try {
       const updated = await api.post<ApiLeague>(`/leagues/${leagueId}/join`);
@@ -544,7 +581,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       moments, leagues, loading,
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
-      setUserPro, joinLeague, refreshAll,
+      setUserPro, updateSpecs, joinLeague, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,
     }}>
       {children}
