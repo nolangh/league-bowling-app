@@ -14,11 +14,13 @@ import inboxRouter from "./inbox";
 import reactionsRouter from "./reactions";
 import reportsRouter from "./reports";
 import ballsRouter from "./balls";
+import scorecardRouter from "./scorecard";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(usersRouter);
+router.use(scorecardRouter);
 router.use(gamesRouter);
 router.use(challengesRouter);
 router.use(momentsRouter);

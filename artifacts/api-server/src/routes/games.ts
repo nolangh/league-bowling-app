@@ -44,8 +44,6 @@ router.post("/games", async (req, res): Promise<void> => {
         ? parseInt(ballIdRaw, 10)
         : null;
 
-  // Verify the ball belongs to this user before linking. Service role bypasses
-  // RLS, so we must enforce ownership in the route.
   if (ballId !== null) {
     const { data: ownedBall } = await supabaseAdmin
       .from("bowling_balls")
@@ -59,6 +57,14 @@ router.post("/games", async (req, res): Promise<void> => {
     }
   }
 
+  const frames = Array.isArray(rawBody?.frames) ? rawBody.frames : null;
+  const scorecardImageUrl = typeof rawBody?.scorecardImageUrl === "string" ? rawBody.scorecardImageUrl : null;
+  const latitude = typeof rawBody?.latitude === "number" ? rawBody.latitude : null;
+  const longitude = typeof rawBody?.longitude === "number" ? rawBody.longitude : null;
+  const locationName = typeof rawBody?.locationName === "string" ? rawBody.locationName : null;
+  const capturedAt = typeof rawBody?.capturedAt === "string" ? rawBody.capturedAt : null;
+  const entryMethod = typeof rawBody?.entryMethod === "string" ? rawBody.entryMethod : "manual";
+
   const { data: game, error: insertErr } = await supabaseAdmin
     .from("games")
     .insert({
@@ -71,6 +77,13 @@ router.post("/games", async (req, res): Promise<void> => {
       ball_id: ballId,
       notes: parsed.data.notes ?? "",
       verified: parsed.data.verified ?? false,
+      frames,
+      scorecard_image_url: scorecardImageUrl,
+      latitude,
+      longitude,
+      location_name: locationName,
+      captured_at: capturedAt,
+      entry_method: entryMethod,
     })
     .select()
     .single();
@@ -126,6 +139,13 @@ function mapGame(row: Record<string, unknown>) {
     ballId: row.ball_id ?? null,
     notes: row.notes,
     verified: row.verified,
+    frames: row.frames ?? null,
+    scorecardImageUrl: row.scorecard_image_url ?? null,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    locationName: row.location_name ?? null,
+    capturedAt: row.captured_at ?? null,
+    entryMethod: row.entry_method ?? "manual",
     createdAt: row.created_at,
   };
 }

@@ -47,6 +47,19 @@ export interface Game {
   ballId?: number | null;
   notes: string;
   verified: boolean;
+  frames?: FrameData[] | null;
+  scorecardImageUrl?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationName?: string | null;
+  capturedAt?: string | null;
+  entryMethod?: string | null;
+}
+
+export interface FrameData {
+  ball1: number | null;
+  ball2: number | null;
+  ball3: number | null;
 }
 
 export interface Ball {
