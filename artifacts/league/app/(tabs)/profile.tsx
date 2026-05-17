@@ -320,10 +320,11 @@ export default function ProfileScreen() {
           {[
             { icon: "users" as const, label: "Friends", href: "/friends" as const },
             { icon: "bookmark" as const, label: "Saved Posts", href: null },
-          ].map((item, i) => (
+            { icon: "shield" as const, label: "Security & Account", href: "/account-security" as const },
+          ].map((item, i, arr) => (
             <TouchableOpacity
               key={item.label}
-              style={[styles.settingsRow, i < 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
+              style={[styles.settingsRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
               activeOpacity={0.7}
               onPress={() => { if (item.href) router.push(item.href as any); }}
             >

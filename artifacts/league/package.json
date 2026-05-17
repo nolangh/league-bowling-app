@@ -59,6 +59,8 @@
     "@expo-google-fonts/barlow-condensed": "^0.4.1",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@supabase/supabase-js": "^2.105.1",
+    "expo-local-authentication": "^55.0.14",
+    "expo-secure-store": "^55.0.14",
     "react-native-purchases": "9.7.2"
   }
 }

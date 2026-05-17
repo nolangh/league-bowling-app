@@ -43,6 +43,10 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-up" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/update-password" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/mfa-challenge" options={{ headerShown: false }} />
+      <Stack.Screen name="account-security" options={{ headerShown: false }} />
       <Stack.Screen
         name="moment/[id]"
         options={{
