@@ -27,10 +27,11 @@ export function rankColor(rank: string): string {
 }
 
 async function formatMoment(row: Record<string, unknown>, userId: number) {
-  const [likeRes, dislikeRes, saveRes] = await Promise.all([
+  const [likeRes, dislikeRes, saveRes, reactionRes] = await Promise.all([
     supabaseAdmin.from("moment_likes").select("id").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
     supabaseAdmin.from("moment_dislikes").select("id").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
     supabaseAdmin.from("moment_saves").select("id").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
+    supabaseAdmin.from("moment_reactions").select("emoji").eq("moment_id", row.id).eq("user_id", userId).maybeSingle(),
   ]);
 
   return {
@@ -53,6 +54,7 @@ async function formatMoment(row: Record<string, unknown>, userId: number) {
     liked: !!likeRes.data,
     disliked: !!dislikeRes.data,
     saved: !!saveRes.data,
+    userReaction: (reactionRes.data as { emoji: string } | null)?.emoji ?? null,
     timeAgo: timeAgo(new Date(row.created_at as string)),
   };
 }
@@ -236,6 +238,28 @@ router.post("/moments/:id/like", async (req, res): Promise<void> => {
       .select()
       .single();
 
+    // Notify moment owner (skip if liking own post)
+    if ((moment as Record<string, unknown>).user_id !== req.userId) {
+      const { data: liker } = await supabaseAdmin
+        .from("users")
+        .select("username")
+        .eq("id", req.userId)
+        .single();
+      if (liker) {
+        await supabaseAdmin.from("notifications").insert({
+          user_id: (moment as Record<string, unknown>).user_id,
+          type: "like",
+          from_user_id: req.userId,
+          from_username: (liker as { username: string }).username,
+          from_initials: (liker as { username: string }).username.substring(0, 2).toUpperCase(),
+          from_avatar_color: "#1a3c2a",
+          moment_id: params.data.id,
+          moment_preview: ((moment as Record<string, unknown>).content as string).substring(0, 80),
+          read: false,
+        });
+      }
+    }
+
     res.json(LikeMomentResponse.parse(await formatMoment(updated as Record<string, unknown>, req.userId)));
     return;
   }
@@ -282,6 +306,64 @@ router.delete("/moments/:id/like", async (req, res): Promise<void> => {
   }
 
   res.json(UnlikeMomentResponse.parse(await formatMoment(moment as Record<string, unknown>, req.userId)));
+});
+
+router.post("/moments/:id/share", async (req, res): Promise<void> => {
+  const momentId = parseInt(req.params.id);
+  if (isNaN(momentId)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const { userIds, message } = req.body as { userIds?: number[]; message?: string };
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    res.status(400).json({ error: "userIds required" });
+    return;
+  }
+
+  const { data: moment } = await supabaseAdmin
+    .from("moments")
+    .select("content, user_id")
+    .eq("id", momentId)
+    .single();
+
+  if (!moment) {
+    res.status(404).json({ error: "Moment not found" });
+    return;
+  }
+
+  const { data: sharer } = await supabaseAdmin
+    .from("users")
+    .select("username")
+    .eq("id", req.userId)
+    .single();
+
+  if (!sharer) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const sharerUsername = (sharer as { username: string }).username;
+  const preview = ((moment as Record<string, unknown>).content as string).substring(0, 80);
+
+  await Promise.all(
+    userIds.map((toUserId) =>
+      supabaseAdmin.from("notifications").insert({
+        user_id: toUserId,
+        type: "share",
+        from_user_id: req.userId,
+        from_username: sharerUsername,
+        from_initials: sharerUsername.substring(0, 2).toUpperCase(),
+        from_avatar_color: "#1a3c2a",
+        moment_id: momentId,
+        moment_preview: preview,
+        message: message ? message.substring(0, 120) : null,
+        read: false,
+      }),
+    ),
+  );
+
+  res.json({ ok: true, sent: userIds.length });
 });
 
 export default router;

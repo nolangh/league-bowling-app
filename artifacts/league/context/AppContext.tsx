@@ -92,8 +92,24 @@ export interface Moment {
   liked: boolean;
   disliked: boolean;
   saved: boolean;
+  userReaction?: string | null;
   initials: string;
   avatarColor: string;
+  createdAt?: string;
+}
+
+export interface Notification {
+  id: string;
+  type: "like" | "comment" | "reaction" | "share";
+  fromUsername: string;
+  fromInitials: string;
+  fromAvatarColor: string;
+  momentId?: string;
+  momentPreview?: string;
+  emoji?: string;
+  message?: string;
+  read: boolean;
+  timeAgo: string;
   createdAt?: string;
 }
 
@@ -205,6 +221,12 @@ interface AppContextValue {
   sendFriendRequest: (userId: number) => Promise<void>;
   acceptFriendRequest: (userId: number) => Promise<void>;
   removeFriend: (userId: number) => Promise<void>;
+  inbox: Notification[];
+  inboxCount: number;
+  fetchInbox: () => Promise<void>;
+  markInboxRead: () => Promise<void>;
+  reactToMoment: (momentId: string, emoji: string | null) => Promise<void>;
+  shareMoment: (momentId: string, userIds: number[], message?: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -231,7 +253,15 @@ type ApiMoment = {
   content: string; score?: number | null; type: string;
   likes: number; comments: number; dislikes?: number; saves?: number; tags?: string[];
   timeAgo: string; liked: boolean; disliked?: boolean; saved?: boolean;
+  userReaction?: string | null;
   initials: string; avatarColor: string; createdAt?: string;
+};
+type ApiNotification = {
+  id: number; type: string;
+  fromUsername: string; fromInitials: string; fromAvatarColor: string;
+  momentId?: number; momentPreview?: string;
+  emoji?: string; message?: string; read: boolean;
+  timeAgo: string; createdAt?: string;
 };
 type ApiLeague = {
   id: number; name: string; description: string; members: number;
@@ -291,6 +321,23 @@ function toMoment(m: ApiMoment): Moment {
     tags: m.tags ?? [],
     disliked: m.disliked ?? false,
     saved: m.saved ?? false,
+    userReaction: m.userReaction ?? null,
+  };
+}
+function toNotification(n: ApiNotification): Notification {
+  return {
+    id: String(n.id),
+    type: n.type as Notification["type"],
+    fromUsername: n.fromUsername,
+    fromInitials: n.fromInitials,
+    fromAvatarColor: n.fromAvatarColor,
+    momentId: n.momentId ? String(n.momentId) : undefined,
+    momentPreview: n.momentPreview,
+    emoji: n.emoji,
+    message: n.message,
+    read: n.read,
+    timeAgo: n.timeAgo,
+    createdAt: n.createdAt,
   };
 }
 function toLeague(l: ApiLeague): League {
@@ -324,11 +371,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [completedChallenges, setCompletedChallenges] = useState<Challenge[]>([]);
   const [moments, setMoments] = useState<Moment[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
+  const [inbox, setInbox] = useState<Notification[]>([]);
+  const [inboxCount, setInboxCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
+  const fetchInbox = async () => {
+    try {
+      const res = await api.get<{ notifications: ApiNotification[]; unreadCount: number }>("/inbox");
+      setInbox(res.notifications.map(toNotification));
+      setInboxCount(res.unreadCount);
+    } catch { /* keep current */ }
+  };
+
   useEffect(() => {
     refreshAll().finally(() => setLoading(false));
+    fetchInbox();
     setupRealtime();
     return () => {
       if (realtimeRef.current) supabase.removeChannel(realtimeRef.current);
@@ -575,6 +633,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await api.delete(`/friends/${userId}`);
   };
 
+  const markInboxRead = async () => {
+    setInboxCount(0);
+    setInbox((prev) => prev.map((n) => ({ ...n, read: true })));
+    try { await api.patch("/inbox/read", {}); } catch { /* keep optimistic */ }
+  };
+
+  const reactToMoment = async (momentId: string, emoji: string | null) => {
+    setMoments((prev) =>
+      prev.map((m) => m.id === momentId ? { ...m, userReaction: emoji } : m)
+    );
+    try {
+      if (emoji === null) {
+        await api.delete(`/moments/${momentId}/react`);
+      } else {
+        await api.post(`/moments/${momentId}/react`, { emoji });
+      }
+    } catch { /* keep optimistic */ }
+  };
+
+  const shareMoment = async (momentId: string, userIds: number[], message?: string) => {
+    try {
+      await api.post(`/moments/${momentId}/share`, { userIds, message });
+    } catch { /* ignore */ }
+  };
+
   return (
     <AppContext.Provider value={{
       user, games, challenges, myActiveChallenges, acceptedChallenges, completedChallenges,
@@ -583,6 +666,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
       setUserPro, updateSpecs, joinLeague, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,
+      inbox, inboxCount, fetchInbox, markInboxRead, reactToMoment, shareMoment,
     }}>
       {children}
     </AppContext.Provider>

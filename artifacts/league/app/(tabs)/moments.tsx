@@ -10,6 +10,7 @@ import {
   Pressable,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -17,7 +18,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
-import { useApp, type Moment } from "@/context/AppContext";
+import { useApp, type Moment, type Friend } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { api } from "@/lib/api";
 
@@ -44,6 +45,8 @@ function MomentCard({
   onSave,
   onComment,
   onTagPress,
+  onReact,
+  onShare,
 }: {
   moment: Moment;
   onLike: () => void;
@@ -51,6 +54,8 @@ function MomentCard({
   onSave: () => void;
   onComment: () => void;
   onTagPress: (tag: string) => void;
+  onReact: (emoji: string | null) => void;
+  onShare: () => void;
 }) {
   const colors = useColors();
   const typeColor: Record<string, string> = {
@@ -97,6 +102,22 @@ function MomentCard({
         </View>
       )}
 
+      <View style={styles.reactions}>
+        {(["❤️", "🔥", "🎳", "👏"] as const).map((emoji) => (
+          <TouchableOpacity
+            key={emoji}
+            onPress={() => onReact(moment.userReaction === emoji ? null : emoji)}
+            style={[
+              styles.reactionBtn,
+              moment.userReaction === emoji && { backgroundColor: colors.primary + "30" },
+            ]}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.reactionEmoji}>{emoji}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionBtn} onPress={onLike} activeOpacity={0.7}>
           <Feather name="heart" size={17} color={moment.liked ? "#ef4444" : colors.mutedForeground} />
@@ -120,13 +141,16 @@ function MomentCard({
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={onSave} activeOpacity={0.7}>
-          <Feather name={moment.saved ? "bookmark" : "bookmark"} size={17}
-            color={moment.saved ? colors.primary : colors.mutedForeground} />
+          <Feather name="bookmark" size={17} color={moment.saved ? colors.primary : colors.mutedForeground} />
           {moment.saves > 0 && (
             <Text style={[styles.actionCount, { color: moment.saved ? colors.primary : colors.mutedForeground }]}>
               {moment.saves}
             </Text>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.actionBtn, { marginLeft: "auto" }]} onPress={onShare} activeOpacity={0.7}>
+          <Feather name="send" size={17} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
     </View>
@@ -296,11 +320,117 @@ function SaveModal({ visible, onClose, onSave, momentId }: {
   );
 }
 
+function ShareModal({ visible, onClose, onShare }: {
+  visible: boolean;
+  onClose: () => void;
+  onShare: (userIds: number[], message?: string) => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    setSelected(new Set());
+    setMessage("");
+    api.get<Friend[]>("/friends")
+      .then((data) => setFriends(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [visible]);
+
+  const toggle = (userId: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+
+  const handleSend = () => {
+    if (selected.size === 0) return;
+    onShare(Array.from(selected), message.trim() || undefined);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <Pressable style={styles.overlay} onPress={onClose}>
+          <Pressable style={[styles.shareSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 16 }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.composerTitle, { color: colors.foreground }]}>Send to Friends</Text>
+
+            {loading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
+            ) : friends.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.mutedForeground, textAlign: "center", paddingVertical: 20 }]}>
+                Add friends to share posts with them
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                {friends.map((f) => {
+                  const isSelected = selected.has(f.userId);
+                  return (
+                    <TouchableOpacity
+                      key={f.userId}
+                      style={[styles.friendRow, { borderBottomColor: colors.border }]}
+                      onPress={() => toggle(f.userId)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.friendAvatar, { backgroundColor: f.avatarColor }]}>
+                        <Text style={styles.avatarText}>{f.initials}</Text>
+                      </View>
+                      <Text style={[styles.friendName, { color: colors.foreground }]}>{f.username}</Text>
+                      <View style={[
+                        styles.checkbox,
+                        {
+                          borderColor: isSelected ? colors.primary : colors.border,
+                          backgroundColor: isSelected ? colors.primary : "transparent",
+                        },
+                      ]}>
+                        {isSelected && <Feather name="check" size={12} color={colors.primaryForeground} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <TextInput
+              style={[styles.composerInput, { backgroundColor: colors.secondary, color: colors.foreground, minHeight: 50 }]}
+              placeholder="Add a message… (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              value={message}
+              onChangeText={setMessage}
+              maxLength={120}
+            />
+
+            <TouchableOpacity
+              style={[styles.postBtn, { backgroundColor: selected.size > 0 ? colors.primary : colors.secondary }]}
+              onPress={handleSend}
+              disabled={selected.size === 0}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.postBtnText, { color: selected.size > 0 ? colors.primaryForeground : colors.mutedForeground }]}>
+                {selected.size > 0 ? `Send to ${selected.size} friend${selected.size > 1 ? "s" : ""}` : "Select friends"}
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export default function MomentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { moments, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment } = useApp();
+  const { moments, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment, inboxCount, reactToMoment, shareMoment } = useApp();
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [searchText, setSearchText] = useState("");
@@ -308,6 +438,7 @@ export default function MomentsScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [composerVisible, setComposerVisible] = useState(false);
   const [saveModal, setSaveModal] = useState<{ visible: boolean; momentId: string }>({ visible: false, momentId: "" });
+  const [shareModal, setShareModal] = useState<{ visible: boolean; momentId: string }>({ visible: false, momentId: "" });
   const [searchResults, setSearchResults] = useState<Moment[]>([]);
   const [searching, setSearching] = useState(false);
 
@@ -370,6 +501,17 @@ export default function MomentsScreen() {
               onPress={() => { setShowSearch(!showSearch); setSearchText(""); setSearchResults([]); }}
             >
               <Feather name="search" size={18} color={colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: colors.card }]}
+              onPress={() => router.push("/inbox" as any)}
+            >
+              <Feather name="bell" size={18} color={colors.foreground} />
+              {inboxCount > 0 && (
+                <View style={[styles.bellBadge, { backgroundColor: colors.orange }]}>
+                  <Text style={styles.bellBadgeText}>{inboxCount > 9 ? "9+" : inboxCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.headerBtn, { backgroundColor: colors.primary }]}
@@ -450,8 +592,10 @@ export default function MomentsScreen() {
             onSave={() => {
               if (m.saved) { unsaveMoment(m.id); } else { setSaveModal({ visible: true, momentId: m.id }); }
             }}
-            onComment={() => router.push(`/moment/${m.id}`)}
+            onComment={() => router.push(`/moment/${m.id}` as any)}
             onTagPress={handleTagPress}
+            onReact={(emoji) => { reactToMoment(m.id, emoji); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            onShare={() => setShareModal({ visible: true, momentId: m.id })}
           />
         ))}
       </ScrollView>
@@ -469,6 +613,15 @@ export default function MomentsScreen() {
         onSave={(listId) => {
           saveMoment(saveModal.momentId, listId);
           setSaveModal({ visible: false, momentId: "" });
+        }}
+      />
+
+      <ShareModal
+        visible={shareModal.visible}
+        onClose={() => setShareModal({ visible: false, momentId: "" })}
+        onShare={(userIds, message) => {
+          shareMoment(shareModal.momentId, userIds, message);
+          setShareModal({ visible: false, momentId: "" });
         }}
       />
     </View>
@@ -513,9 +666,23 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tagPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50 },
   tagText: { fontSize: 12, fontFamily: "BarlowCondensed_600SemiBold" },
-  actions: { flexDirection: "row", gap: 16, paddingTop: 4 },
+  reactions: { flexDirection: "row", gap: 4, paddingTop: 2 },
+  reactionBtn: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 50 },
+  reactionEmoji: { fontSize: 18 },
+  actions: { flexDirection: "row", gap: 16, paddingTop: 4, alignItems: "center" },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
   actionCount: { fontSize: 13, fontWeight: "600" },
+  bellBadge: {
+    position: "absolute", top: -4, right: -4,
+    minWidth: 16, height: 16, borderRadius: 8,
+    justifyContent: "center", alignItems: "center", paddingHorizontal: 3,
+  },
+  bellBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  shareSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 14 },
+  friendRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
+  friendAvatar: { width: 38, height: 38, borderRadius: 19, justifyContent: "center", alignItems: "center" },
+  friendName: { flex: 1, fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
+  checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, justifyContent: "center", alignItems: "center" },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   composerSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 14 },
   saveSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 0 },

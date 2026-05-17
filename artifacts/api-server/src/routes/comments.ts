@@ -113,6 +113,28 @@ router.post("/moments/:id/comments", async (req, res): Promise<void> => {
     .update({ comment_count: (moment.comment_count ?? 0) + 1 })
     .eq("id", momentId);
 
+  // Notify the moment owner (skip if commenting on own post)
+  const { data: momentOwner } = await supabaseAdmin
+    .from("moments")
+    .select("user_id, content")
+    .eq("id", momentId)
+    .single();
+
+  if (momentOwner && (momentOwner as Record<string, unknown>).user_id !== req.userId) {
+    await supabaseAdmin.from("notifications").insert({
+      user_id: (momentOwner as Record<string, unknown>).user_id,
+      type: "comment",
+      from_user_id: req.userId,
+      from_username: user.username,
+      from_initials: user.username.substring(0, 2).toUpperCase(),
+      from_avatar_color: "#1a3c2a",
+      moment_id: momentId,
+      moment_preview: ((momentOwner as Record<string, unknown>).content as string).substring(0, 80),
+      message: content.trim().substring(0, 80),
+      read: false,
+    });
+  }
+
   res.status(201).json({
     id: comment.id,
     momentId: comment.moment_id,

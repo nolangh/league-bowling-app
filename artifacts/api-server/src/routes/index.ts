@@ -10,6 +10,8 @@ import leaderboardRouter from "./leaderboard";
 import commentsRouter from "./comments";
 import savesRouter from "./saves";
 import dislikesRouter from "./dislikes";
+import inboxRouter from "./inbox";
+import reactionsRouter from "./reactions";
 
 const router: IRouter = Router();
 
@@ -24,5 +26,7 @@ router.use(leaderboardRouter);
 router.use(commentsRouter);
 router.use(savesRouter);
 router.use(dislikesRouter);
+router.use(inboxRouter);
+router.use(reactionsRouter);
 
 export default router;
