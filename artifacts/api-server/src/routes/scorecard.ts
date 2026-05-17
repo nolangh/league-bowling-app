@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { openrouter } from "@workspace/integrations-openrouter-ai";
 
 const router: IRouter = Router();
 
@@ -17,9 +17,9 @@ router.post("/games/scorecard/analyze", async (req, res): Promise<void> => {
   const mime = (mimeType ?? "image/jpeg") as string;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      max_completion_tokens: 1024,
+    const response = await openrouter.chat.completions.create({
+      model: "google/gemma-3-4b-it",
+      max_tokens: 1024,
       messages: [
         {
           role: "user",
@@ -28,7 +28,6 @@ router.post("/games/scorecard/analyze", async (req, res): Promise<void> => {
               type: "image_url",
               image_url: {
                 url: `data:${mime};base64,${imageBase64}`,
-                detail: "high",
               },
             },
             {
