@@ -177,7 +177,7 @@ export interface League {
 const RANK_COLORS: Record<Rank, string> = {
   Gutter:  "#a0a0a0",
   Spare:   "#a8d8a8",
-  Strike:  "#9fe870",
+  Strike:  "#ffffff",
   Turkey:  "#f5c842",
   Perfect: "#60c8ff",
   Legend:  "#ff5f1f",

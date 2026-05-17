@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, gap: 14 },
   hero: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   avatar: { width: 64, height: 64, borderRadius: 32, justifyContent: "center", alignItems: "center" },
-  avatarText: { fontSize: 22, fontWeight: "800", color: "#9fe870" },
+  avatarText: { fontSize: 22, fontWeight: "800", color: "#ffffff" },
   heroInfo: { flex: 1, gap: 4 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { fontSize: 20, fontWeight: "800" },
