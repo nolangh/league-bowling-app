@@ -33,7 +33,7 @@ function SocialIcon({ provider, color }: { provider: OAuthProvider; color: strin
 export default function SignInScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { signIn, signInWithOAuth, signInWithBiometric, biometricAvailable, biometricEnabled, biometricType } = useAuth();
+  const { signIn, signInWithOAuth, signInWithBiometric, signOut, biometricAvailable, biometricEnabled, biometricType } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,9 +41,18 @@ export default function SignInScreen() {
   const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
   const [bioLoading, setBioLoading] = useState(false);
 
-  const afterSignIn = (mfaRequired: boolean, factorId?: string) => {
+  const afterSignIn = async (mfaRequired: boolean, factorId?: string) => {
     if (mfaRequired && factorId) {
       router.replace({ pathname: "/auth/mfa-challenge" as any, params: { factorId } });
+    } else if (mfaRequired && !factorId) {
+      // Security: account needs AAL2 but we couldn't resolve a usable SMS factor
+      // (e.g. a legacy authenticator-app factor). Refuse to grant app access and
+      // sign the user out so they can recover via password reset / support.
+      try { await signOut(); } catch {}
+      Alert.alert(
+        "Two-factor sign-in unavailable",
+        "Your account requires a second sign-in step that this version of League can't complete. Reset your password from the sign-in screen or contact support to re-enroll SMS 2FA.",
+      );
     } else {
       router.replace("/(tabs)");
     }

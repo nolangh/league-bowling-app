@@ -7,22 +7,21 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { SvgXml } from "react-native-svg";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
-type Section = "email" | "password" | "mfa-setup" | null;
+type Section = "email" | "password" | "mfa-phone" | "mfa-verify" | null;
 
 export default function AccountSecurityScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
-    user, session, signOut,
+    user, signOut,
     biometricAvailable, biometricEnabled, biometricType,
-    mfaEnabled,
+    mfaEnabled, mfaPhone, mfaFactorId,
     enableBiometric, disableBiometric,
     updateEmail, updatePassword,
-    enrollMFA, verifyMFAEnrollment, unenrollMFA,
+    enrollPhoneMFA, sendMFACode, verifyMFA, unenrollMFA,
     refreshMFAState,
   } = useAuth();
 
@@ -41,25 +40,13 @@ export default function AccountSecurityScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [mfaQrCode, setMfaQrCode] = useState("");
-  const [mfaSecret, setMfaSecret] = useState("");
-  const [mfaFactorId, setMfaFactorId] = useState("");
-  const [mfaVerifiedFactorId, setMfaVerifiedFactorId] = useState("");
+  const [mfaPhoneDraft, setMfaPhoneDraft] = useState("");
+  const [mfaPendingFactorId, setMfaPendingFactorId] = useState("");
+  const [mfaChallengeId, setMfaChallengeId] = useState("");
   const [mfaCode, setMfaCode] = useState("");
+  const [mfaResending, setMfaResending] = useState(false);
 
   useEffect(() => { refreshMFAState(); }, []);
-
-  useEffect(() => {
-    if (mfaEnabled) {
-      supabase_getFactorId().then(setMfaVerifiedFactorId).catch(() => {});
-    }
-  }, [mfaEnabled]);
-
-  async function supabase_getFactorId(): Promise<string> {
-    const { supabase } = await import("@/lib/supabase");
-    const { data } = await supabase.auth.mfa.listFactors();
-    return (data?.totp ?? []).find((f) => f.status === "verified")?.id ?? "";
-  }
 
   const toggle = (section: Section) => {
     setOpen((prev) => prev === section ? null : section);
@@ -90,43 +77,78 @@ export default function AccountSecurityScreen() {
     finally { setLoading(false); }
   };
 
-  const handleMFAEnable = async () => {
+  const handleMFAStart = () => {
+    setError(""); setSuccess("");
+    setMfaPhoneDraft(""); setMfaCode(""); setMfaPendingFactorId(""); setMfaChallengeId("");
+    setOpen("mfa-phone");
+  };
+
+  const handleMFASendCode = async () => {
+    const phone = mfaPhoneDraft.trim();
+    // Accept E.164 (e.g. +14155551234). 8–15 digits after the +.
+    if (!/^\+\d{8,15}$/.test(phone)) {
+      setError("Enter your phone in international format, e.g. +14155551234.");
+      return;
+    }
     setLoading(true); setError(""); setSuccess("");
     try {
-      const { qrCode, secret, factorId } = await enrollMFA();
-      setMfaQrCode(qrCode); setMfaSecret(secret); setMfaFactorId(factorId);
-      setOpen("mfa-setup");
-    } catch (e: any) { setError(e.message ?? "Could not start 2FA setup."); }
-    finally { setLoading(false); }
+      const { factorId, challengeId } = await enrollPhoneMFA(phone);
+      setMfaPendingFactorId(factorId);
+      setMfaChallengeId(challengeId);
+      setOpen("mfa-verify");
+      setSuccess(`We texted a 6-digit code to ${phone}.`);
+    } catch (e: any) {
+      setError(e.message ?? "Could not send verification code. Make sure SMS is enabled in your Supabase project.");
+    } finally { setLoading(false); }
+  };
+
+  const handleMFAResend = async () => {
+    if (!mfaPendingFactorId) return;
+    setMfaResending(true); setError(""); setSuccess("");
+    try {
+      const { challengeId } = await sendMFACode(mfaPendingFactorId);
+      setMfaChallengeId(challengeId);
+      setSuccess("New code sent.");
+      setMfaCode("");
+    } catch (e: any) {
+      setError(e.message ?? "Could not resend code.");
+    } finally { setMfaResending(false); }
   };
 
   const handleMFAVerify = async () => {
     const clean = mfaCode.replace(/\s/g, "");
-    if (clean.length !== 6) { setError("Enter the 6-digit code from your authenticator app."); return; }
+    if (clean.length !== 6) { setError("Enter the 6-digit code we texted you."); return; }
+    if (!mfaPendingFactorId || !mfaChallengeId) { setError("Verification session expired. Tap Resend code."); return; }
     setLoading(true); setError(""); setSuccess("");
     try {
-      await verifyMFAEnrollment(mfaFactorId, clean);
-      setMfaVerifiedFactorId(mfaFactorId);
+      await verifyMFA(mfaPendingFactorId, mfaChallengeId, clean);
       setSuccess("Two-factor authentication is now enabled.");
-      setOpen(null); setMfaQrCode(""); setMfaSecret(""); setMfaCode("");
-    } catch (e: any) { setError(e.message ?? "Invalid code. Try again."); setMfaCode(""); }
-    finally { setLoading(false); }
+      setOpen(null);
+      setMfaPhoneDraft(""); setMfaCode(""); setMfaPendingFactorId(""); setMfaChallengeId("");
+    } catch (e: any) {
+      setError(e.message ?? "Invalid code. Try again.");
+      setMfaCode("");
+    } finally { setLoading(false); }
   };
 
   const handleMFADisable = () => {
     Alert.alert(
       "Disable 2FA",
-      "This will remove two-factor authentication from your account. Are you sure?",
+      "This will remove SMS two-factor authentication from your account. Are you sure?",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Disable", style: "destructive",
           onPress: async () => {
-            if (!mfaVerifiedFactorId) return;
+            if (!mfaFactorId) return;
+            setLoading(true); setError(""); setSuccess("");
             try {
-              await unenrollMFA(mfaVerifiedFactorId);
-              setMfaVerifiedFactorId(""); setOpen(null);
-            } catch (e: any) { setError(e.message ?? "Could not disable 2FA."); }
+              await unenrollMFA(mfaFactorId);
+              setOpen(null);
+              setSuccess("Two-factor authentication disabled.");
+            } catch (e: any) {
+              setError(e.message ?? "Could not disable 2FA.");
+            } finally { setLoading(false); }
           },
         },
       ]
@@ -187,15 +209,6 @@ export default function AccountSecurityScreen() {
       ]
     );
   };
-
-  const qrSvgXml = React.useMemo(() => {
-    if (!mfaQrCode) return "";
-    try {
-      const prefix = "data:image/svg+xml;base64,";
-      if (mfaQrCode.startsWith(prefix)) return atob(mfaQrCode.slice(prefix.length));
-      return mfaQrCode;
-    } catch { return ""; }
-  }, [mfaQrCode]);
 
   const Row = ({ icon, label, value, onPress, color }: {
     icon: string; label: string; value?: string; onPress: () => void; color?: string;
@@ -312,48 +325,75 @@ export default function AccountSecurityScreen() {
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <View style={[styles.settingsRow, { borderBottomColor: "transparent" }]}>
             <View style={[styles.rowIcon, { backgroundColor: colors.primary + "20" }]}>
-              <Feather name="shield" size={17} color={colors.primary} />
+              <Feather name="message-square" size={17} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Authenticator App</Text>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>SMS Text Code</Text>
               <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>
-                {mfaEnabled ? "Enabled — TOTP" : "Disabled"}
+                {mfaEnabled
+                  ? `Enabled${mfaPhone ? ` — ${mfaPhone}` : ""}`
+                  : "We'll text you a code at sign-in"}
               </Text>
             </View>
             {loading && !open ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
               <Switch
-                value={mfaEnabled}
-                onValueChange={(val) => val ? handleMFAEnable() : handleMFADisable()}
+                value={mfaEnabled || open === "mfa-phone" || open === "mfa-verify"}
+                onValueChange={(val) => val ? handleMFAStart() : handleMFADisable()}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor="#fff"
               />
             )}
           </View>
 
-          {open === "mfa-setup" && !!qrSvgXml && (
-            <View style={[styles.expandArea, { borderTopColor: colors.border, gap: 16 }]}>
-              <Text style={[styles.expandTitle, { color: colors.foreground }]}>Scan this QR code</Text>
+          {open === "mfa-phone" && (
+            <View style={[styles.expandArea, { borderTopColor: colors.border, gap: 12 }]}>
+              <Text style={[styles.expandTitle, { color: colors.foreground }]}>Add your phone number</Text>
               <Text style={[styles.expandBody, { color: colors.mutedForeground }]}>
-                Open your authenticator app (e.g. Google Authenticator, Authy) and scan the QR code below.
+                Enter your number in international format. We'll text you a 6-digit code to confirm.
               </Text>
-              <View style={[styles.qrWrapper, { backgroundColor: "#fff" }]}>
-                <SvgXml xml={qrSvgXml} width={200} height={200} />
-              </View>
-              <Text style={[styles.secretLabel, { color: colors.mutedForeground }]}>Or enter this key manually:</Text>
-              <View style={[styles.secretBox, { backgroundColor: colors.secondary }]}>
-                <Text style={[styles.secretText, { color: colors.foreground }]} selectable>{mfaSecret}</Text>
-              </View>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
-                placeholder="Enter 6-digit code"
+                placeholder="+1 415 555 1234"
                 placeholderTextColor={colors.mutedForeground}
+                value={mfaPhoneDraft}
+                onChangeText={(t) => { setMfaPhoneDraft(t); setError(""); }}
+                keyboardType="phone-pad"
+                autoFocus
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]}
+                onPress={handleMFASendCode}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : (
+                  <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Send code</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {open === "mfa-verify" && (
+            <View style={[styles.expandArea, { borderTopColor: colors.border, gap: 12 }]}>
+              <Text style={[styles.expandTitle, { color: colors.foreground }]}>Enter the 6-digit code</Text>
+              <Text style={[styles.expandBody, { color: colors.mutedForeground }]}>
+                We texted a code to {mfaPhoneDraft || "your phone"}. It may take a moment to arrive.
+              </Text>
+              <TextInput
+                style={[styles.input, {
+                  borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary,
+                  textAlign: "center", fontSize: 22, letterSpacing: 8,
+                }]}
+                placeholder="000000"
+                placeholderTextColor={colors.border}
                 value={mfaCode}
                 onChangeText={(t) => { setMfaCode(t.replace(/\D/g, "").slice(0, 6)); setError(""); }}
                 keyboardType="number-pad"
                 maxLength={6}
-                textAlign="center"
+                autoFocus
               />
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]}
@@ -362,39 +402,57 @@ export default function AccountSecurityScreen() {
                 activeOpacity={0.85}
               >
                 {loading ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : (
-                  <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Activate 2FA</Text>
+                  <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Verify & enable</Text>
                 )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleMFAResend}
+                disabled={mfaResending}
+                style={{ paddingVertical: 6, alignSelf: "center" }}
+              >
+                <Text style={[{ color: colors.primary, fontFamily: "DMSans_500Medium", fontSize: 14 }]}>
+                  {mfaResending ? "Sending…" : "Resend code"}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {biometricAvailable && (
-          <>
-            <Text style={[styles.section, { color: colors.mutedForeground }]}>BIOMETRIC LOGIN</Text>
-            <View style={[styles.card, { backgroundColor: colors.card }]}>
-              <View style={[styles.settingsRow, { borderBottomColor: "transparent" }]}>
-                <View style={[styles.rowIcon, { backgroundColor: colors.primary + "20" }]}>
-                  <Feather name={biometricType === "face" ? "aperture" : ("fingerprint" as any)} size={17} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>
-                    {biometricType === "face" ? "Face ID" : "Fingerprint"}
-                  </Text>
-                  <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>
-                    {biometricEnabled ? "Enabled — sign in without your password" : "Tap to set up quick sign-in"}
-                  </Text>
-                </View>
-                <Switch
-                  value={biometricEnabled}
-                  onValueChange={handleBiometricToggle}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#fff"
-                />
-              </View>
+        <Text style={[styles.section, { color: colors.mutedForeground }]}>BIOMETRIC LOGIN</Text>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={[styles.settingsRow, { borderBottomColor: "transparent" }]}>
+            <View style={[styles.rowIcon, {
+              backgroundColor: biometricAvailable ? colors.primary + "20" : colors.border + "60",
+            }]}>
+              <Feather
+                name={biometricType === "face" ? "aperture" : ("fingerprint" as any)}
+                size={17}
+                color={biometricAvailable ? colors.primary : colors.mutedForeground}
+              />
             </View>
-          </>
-        )}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>
+                {biometricType === "face" ? "Face ID" : biometricType === "fingerprint" ? "Fingerprint" : "Biometric Login"}
+              </Text>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>
+                {Platform.OS === "web"
+                  ? "Open League on your phone to set this up"
+                  : !biometricAvailable
+                  ? "Enable Face ID or fingerprint in your device settings first"
+                  : biometricEnabled
+                  ? "Enabled — sign in without your password"
+                  : "Tap to set up quick sign-in"}
+              </Text>
+            </View>
+            <Switch
+              value={biometricEnabled}
+              onValueChange={handleBiometricToggle}
+              disabled={!biometricAvailable}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
 
         <Text style={[styles.section, { color: colors.mutedForeground }]}>SESSION</Text>
         <TouchableOpacity

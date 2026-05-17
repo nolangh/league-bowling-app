@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -12,28 +12,52 @@ import { useColors } from "@/hooks/useColors";
 export default function MFAChallengeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { challengeMFA, signOut } = useAuth();
+  const { sendMFACode, verifyMFA, signOut, mfaPhone } = useAuth();
   const { factorId } = useLocalSearchParams<{ factorId: string }>();
 
   const [code, setCode] = useState("");
+  const [challengeId, setChallengeId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const inputRef = useRef<TextInput>(null);
+
+  // Mask the phone number for the UI, e.g. "+1 415 ••• ••34"
+  const maskedPhone = React.useMemo(() => {
+    if (!mfaPhone) return "your phone";
+    const digits = mfaPhone.replace(/\D/g, "");
+    if (digits.length < 4) return mfaPhone;
+    return `••• ••• ${digits.slice(-4)}`;
+  }, [mfaPhone]);
+
+  const requestCode = async () => {
+    if (!factorId) { setError("Missing 2FA session. Sign in again."); setSending(false); return; }
+    setSending(true); setError(""); setInfo("");
+    try {
+      const { challengeId: cid } = await sendMFACode(factorId as string);
+      setChallengeId(cid);
+      setInfo(`Code sent to ${maskedPhone}.`);
+    } catch (e: any) {
+      setError(e.message ?? "Could not send the code. Try resending.");
+    } finally { setSending(false); }
+  };
+
+  // Auto-send the SMS once on screen mount.
+  useEffect(() => { requestCode(); }, [factorId]);
 
   const handleVerify = async () => {
     const clean = code.replace(/\s/g, "");
-    if (clean.length !== 6) { setError("Enter the 6-digit code from your authenticator app."); return; }
-    setError("");
-    setLoading(true);
+    if (clean.length !== 6) { setError("Enter the 6-digit code we texted you."); return; }
+    if (!challengeId) { setError("Tap Resend code first."); return; }
+    setError(""); setLoading(true);
     try {
-      await challengeMFA(factorId as string, clean);
+      await verifyMFA(factorId as string, challengeId, clean);
       router.replace("/(tabs)");
     } catch (e: any) {
       setError(e.message ?? "Invalid code. Try again.");
       setCode("");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleCancel = async () => {
@@ -49,11 +73,11 @@ export default function MFAChallengeScreen() {
       <View style={[styles.inner, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.hero}>
           <View style={[styles.iconCircle, { backgroundColor: colors.card }]}>
-            <Feather name="shield" size={32} color={colors.primary} />
+            <Feather name="message-square" size={32} color={colors.primary} />
           </View>
-          <Text style={[styles.title, { color: colors.foreground }]}>Two-Factor Auth</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Check your texts</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Enter the 6-digit code from your authenticator app to continue.
+            We sent a 6-digit code to {maskedPhone}. Enter it below to finish signing in.
           </Text>
         </View>
 
@@ -69,15 +93,17 @@ export default function MFAChallengeScreen() {
             maxLength={6}
             autoFocus
             textAlign="center"
+            editable={!sending}
           />
           {!!error && <Text style={styles.errorText}>{error}</Text>}
+          {!error && !!info && <Text style={[styles.infoText, { color: colors.mutedForeground }]}>{info}</Text>}
         </View>
 
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]}
+            style={[styles.btn, { backgroundColor: colors.primary, opacity: (loading || sending) ? 0.7 : 1 }]}
             onPress={handleVerify}
-            disabled={loading || code.length < 6}
+            disabled={loading || sending || code.length < 6}
             activeOpacity={0.85}
           >
             {loading ? (
@@ -85,6 +111,17 @@ export default function MFAChallengeScreen() {
             ) : (
               <Text style={[styles.btnText, { color: colors.primaryForeground }]}>Verify</Text>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.resendBtn}
+            onPress={requestCode}
+            disabled={sending || loading}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.resendText, { color: sending ? colors.mutedForeground : colors.primary }]}>
+              {sending ? "Sending…" : "Resend code"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.7}>
@@ -109,9 +146,12 @@ const styles = StyleSheet.create({
     fontSize: 36, fontFamily: "BarlowCondensed_700Bold", letterSpacing: 14, width: "100%",
   },
   errorText: { color: "#ef4444", fontSize: 13, fontFamily: "DMSans_400Regular" },
+  infoText: { fontSize: 13, fontFamily: "DMSans_400Regular" },
   actions: { gap: 12 },
   btn: { borderRadius: 50, paddingVertical: 16, alignItems: "center" },
   btnText: { fontSize: 17, fontFamily: "BarlowCondensed_700Bold", letterSpacing: 0.5 },
+  resendBtn: { alignItems: "center", paddingVertical: 8 },
+  resendText: { fontSize: 15, fontFamily: "DMSans_500Medium" },
   cancelBtn: { alignItems: "center", paddingVertical: 8 },
   cancelText: { fontSize: 14, fontFamily: "DMSans_400Regular" },
 });
