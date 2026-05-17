@@ -42,6 +42,54 @@ function mapBall(row: BallRow) {
   };
 }
 
+// ── Ball catalog search (no auth required beyond the global middleware) ──────
+type CatalogRow = {
+  id: number;
+  brand: string;
+  model: string;
+  coverstock_type: string | null;
+  coverstock_name: string | null;
+  core_name: string | null;
+  core_type: string | null;
+  default_surface: string | null;
+  min_weight: number;
+  max_weight: number;
+};
+
+router.get("/balls/catalog/search", async (req, res): Promise<void> => {
+  const q = ((req.query.q as string) ?? "").trim();
+  if (!q || q.length < 2) {
+    res.json([]);
+    return;
+  }
+  const term = `%${q}%`;
+  const { data, error } = await supabaseAdmin
+    .from("ball_catalog")
+    .select("*")
+    .or(`brand.ilike.${term},model.ilike.${term}`)
+    .order("brand")
+    .order("model")
+    .limit(20);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json(
+    (data ?? []).map((r: CatalogRow) => ({
+      id: r.id,
+      brand: r.brand,
+      model: r.model,
+      coverstockType: r.coverstock_type,
+      coverstockName: r.coverstock_name,
+      coreName: r.core_name,
+      coreType: r.core_type,
+      defaultSurface: r.default_surface,
+      minWeight: r.min_weight,
+      maxWeight: r.max_weight,
+    }))
+  );
+});
+
 router.get("/balls", async (req, res): Promise<void> => {
   const { data, error } = await supabaseAdmin
     .from("bowling_balls")

@@ -8,6 +8,7 @@
     "seed:revenuecat": "tsx ./src/seedRevenueCat.ts",
     "seed:league": "tsx ./src/seedLeague.ts",
     "seed:supabase": "tsx ./src/seedSupabase.ts",
+    "seed:ball-catalog": "tsx ./src/seedBallCatalog.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

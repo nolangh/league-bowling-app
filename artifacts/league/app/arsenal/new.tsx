@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  FlatList,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -20,15 +21,75 @@ import { Image } from "expo-image";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { uploadMedia } from "@/lib/media";
+import { api } from "@/lib/api";
 
 const WEIGHTS = [10, 11, 12, 13, 14, 15, 16];
 const COVERSTOCKS = ["Solid Reactive", "Pearl Reactive", "Hybrid Reactive", "Urethane", "Plastic"];
+
+type CatalogBall = {
+  id: number;
+  brand: string;
+  model: string;
+  coverstockType: string | null;
+  coverstockName: string | null;
+  coreName: string | null;
+  coreType: string | null;
+  defaultSurface: string | null;
+  minWeight: number;
+  maxWeight: number;
+};
 
 export default function NewBallScreen() {
   const colors = useColors();
   const router = useRouter();
   const { createBall } = useApp();
 
+  // ── catalog search ──────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [catalogResults, setCatalogResults] = useState<CatalogBall[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchQuery.length < 2) {
+      setCatalogResults([]);
+      setShowResults(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await api.get<CatalogBall[]>(
+          `/balls/catalog/search?q=${encodeURIComponent(searchQuery)}`
+        );
+        setCatalogResults(results);
+        setShowResults(results.length > 0);
+      } catch {
+        setCatalogResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }, [searchQuery]);
+
+  const applyBall = (ball: CatalogBall) => {
+    setName(`${ball.brand} ${ball.model}`);
+    setBrand(ball.brand);
+    if (ball.coverstockType) setCoverstock(ball.coverstockType);
+    const coreParts = [ball.coreName, ball.coreType].filter(Boolean);
+    if (coreParts.length) setCore(coreParts.join(" · "));
+    if (ball.defaultSurface) setSurface(ball.defaultSurface);
+    const defaultWeight = Math.min(16, Math.max(ball.minWeight, 15));
+    setWeight(defaultWeight);
+    setSearchQuery("");
+    setCatalogResults([]);
+    setShowResults(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  // ── form fields ─────────────────────────────────────────────────────────
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [weight, setWeight] = useState<number | null>(15);
@@ -103,8 +164,69 @@ export default function NewBallScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Image picker */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Catalog search ──────────────────────────────────────────────── */}
+        <View style={[styles.searchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.searchRow}>
+            <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.foreground }]}
+              placeholder="Search ball catalog (e.g. Storm Phaze)…"
+              placeholderTextColor={colors.mutedForeground}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {searching && <ActivityIndicator size="small" color={colors.primary} />}
+            {searchQuery.length > 0 && !searching && (
+              <TouchableOpacity onPress={() => { setSearchQuery(""); setShowResults(false); }}>
+                <Feather name="x" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={[styles.searchHint, { color: colors.mutedForeground }]}>
+            Select a ball to auto-fill specs — then customise as needed
+          </Text>
+        </View>
+
+        {/* ── Catalog results dropdown ─────────────────────────────────── */}
+        {showResults && (
+          <View style={[styles.resultsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <FlatList
+              data={catalogResults}
+              keyExtractor={(item) => String(item.id)}
+              scrollEnabled={false}
+              ItemSeparatorComponent={() => (
+                <View style={[styles.resultDivider, { backgroundColor: colors.border }]} />
+              )}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.resultRow}
+                  onPress={() => applyBall(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.resultMain}>
+                    <Text style={[styles.resultName, { color: colors.foreground }]}>
+                      {item.brand} {item.model}
+                    </Text>
+                    <Text style={[styles.resultSub, { color: colors.mutedForeground }]}>
+                      {[item.coverstockType, item.coreType ? `${item.coreType} Core` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
+
+        {/* ── Image picker ─────────────────────────────────────────────── */}
         <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.85}>
           <View style={[styles.imageBox, { backgroundColor: color || colors.card, borderColor: colors.border }]}>
             {uploading ? (
@@ -129,10 +251,18 @@ export default function NewBallScreen() {
             {WEIGHTS.map((w) => (
               <TouchableOpacity
                 key={w}
-                style={[styles.pill, { backgroundColor: weight === w ? colors.primary : colors.card, borderColor: weight === w ? colors.primary : colors.border }]}
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: weight === w ? colors.primary : colors.card,
+                    borderColor: weight === w ? colors.primary : colors.border,
+                  },
+                ]}
                 onPress={() => setWeight(w)}
               >
-                <Text style={[styles.pillText, { color: weight === w ? colors.primaryForeground : colors.foreground }]}>{w}</Text>
+                <Text style={[styles.pillText, { color: weight === w ? colors.primaryForeground : colors.foreground }]}>
+                  {w}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -146,20 +276,28 @@ export default function NewBallScreen() {
             {COVERSTOCKS.map((c) => (
               <TouchableOpacity
                 key={c}
-                style={[styles.pill, { backgroundColor: coverstock === c ? colors.primary : colors.card, borderColor: coverstock === c ? colors.primary : colors.border }]}
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: coverstock === c ? colors.primary : colors.card,
+                    borderColor: coverstock === c ? colors.primary : colors.border,
+                  },
+                ]}
                 onPress={() => setCoverstock(c)}
               >
-                <Text style={[styles.pillText, { color: coverstock === c ? colors.primaryForeground : colors.foreground }]}>{c}</Text>
+                <Text style={[styles.pillText, { color: coverstock === c ? colors.primaryForeground : colors.foreground }]}>
+                  {c}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </ScrollView>
 
-        <Field label="Core" value={core} onChangeText={setCore} placeholder="Symmetric / Asymmetric / model name" />
+        <Field label="Core" value={core} onChangeText={setCore} placeholder="Ergo · Asymmetric" />
+        <Field label="Surface" value={surface} onChangeText={setSurface} placeholder="2000 grit Abralon / Factory Polish" />
         <Field label="Drilling Layout" value={drillingLayout} onChangeText={setDrillingLayout} placeholder='e.g. "60° x 4.5″ x 35°"' />
         <Field label="Span" value={span} onChangeText={setSpan} placeholder='e.g. "4 1/2″ middle / 4 5/16″ ring"' />
         <Field label="Pitch" value={pitch} onChangeText={setPitch} placeholder='e.g. "1/4″ FW, 1/8″ LF"' />
-        <Field label="Surface" value={surface} onChangeText={setSurface} placeholder="2000 grit Abralon / Factory Polish" />
         <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Anything else…" multiline />
 
         <TouchableOpacity
@@ -211,6 +349,35 @@ function Field(props: {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 60, gap: 4 },
+
+  searchCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 12,
+    gap: 6,
+  },
+  searchRow: { flexDirection: "row", alignItems: "center" },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  searchHint: { fontSize: 11, fontWeight: "500" },
+
+  resultsCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  resultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  resultMain: { flex: 1 },
+  resultName: { fontSize: 14, fontWeight: "700" },
+  resultSub: { fontSize: 12, marginTop: 1 },
+  resultDivider: { height: 1 },
+
   imagePicker: { alignItems: "center", marginBottom: 16 },
   imageBox: {
     width: 120, height: 120, borderRadius: 60, borderWidth: 1,
