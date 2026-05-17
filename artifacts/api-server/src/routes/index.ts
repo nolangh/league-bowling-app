@@ -15,6 +15,7 @@ import reactionsRouter from "./reactions";
 import reportsRouter from "./reports";
 import ballsRouter from "./balls";
 import scorecardRouter from "./scorecard";
+import alleysRouter from "./alleys";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(inboxRouter);
 router.use(reactionsRouter);
 router.use(reportsRouter);
 router.use(ballsRouter);
+router.use(alleysRouter);
 
 export default router;

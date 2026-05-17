@@ -19,18 +19,20 @@ import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useApp, getRankColor } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
+import { AlleyPicker } from "@/components/AlleyPicker";
 import { useSubscription } from "@/lib/revenuecat";
 
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, games, setUserPro, updateSpecs } = useApp();
+  const { user, games, setUserPro, updateSpecs, setHomeAlley } = useApp();
   const { isSubscribed, offerings, purchase, isPurchasing, restore, isRestoring, isConfigured } = useSubscription();
 
   const [proModalVisible, setProModalVisible] = useState(false);
   const [purchaseConfirmVisible, setPurchaseConfirmVisible] = useState(false);
   const [specsModalVisible, setSpecsModalVisible] = useState(false);
+  const [alleyPickerOpen, setAlleyPickerOpen] = useState(false);
   const [draftRevRate, setDraftRevRate] = useState("");
   const [draftBallSpeed, setDraftBallSpeed] = useState("");
   const [draftAxisTilt, setDraftAxisTilt] = useState("");
@@ -224,6 +226,39 @@ export default function ProfileScreen() {
           </View>
           <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
         </View>
+
+        {/* Home Alley */}
+        <TouchableOpacity
+          style={[styles.homeAlleyCard, { backgroundColor: colors.card }]}
+          onPress={() => setAlleyPickerOpen(true)}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.homeAlleyIconBox, { backgroundColor: colors.primary + "22" }]}>
+            <Feather name="home" size={16} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.homeAlleyLabel, { color: colors.mutedForeground }]}>HOME ALLEY</Text>
+            {user.homeAlleyName ? (
+              <Text style={[styles.homeAlleyName, { color: colors.foreground }]} numberOfLines={1}>
+                {user.homeAlleyName}
+              </Text>
+            ) : (
+              <Text style={[styles.homeAlleyEmpty, { color: colors.mutedForeground }]}>
+                Tap to set your home alley
+              </Text>
+            )}
+          </View>
+          {user.homeAlleyName ? (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); setHomeAlley(null); Haptics.selectionAsync(); }}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ) : (
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          )}
+        </TouchableOpacity>
 
         {/* Recent Games Preview */}
         <View style={styles.recentSection}>
@@ -580,6 +615,13 @@ export default function ProfileScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <AlleyPicker
+        visible={alleyPickerOpen}
+        onClose={() => setAlleyPickerOpen(false)}
+        onPick={(a) => setHomeAlley(a)}
+        title="Set Home Alley"
+      />
     </View>
   );
 }
@@ -623,6 +665,11 @@ const styles = StyleSheet.create({
   teamCard: { borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
   teamLabel: { fontSize: 9, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.8 },
   teamName: { fontSize: 18, fontFamily: "BarlowCondensed_700Bold" },
+  homeAlleyCard: { borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
+  homeAlleyIconBox: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  homeAlleyLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginBottom: 2 },
+  homeAlleyName: { fontSize: 15, fontWeight: "700" },
+  homeAlleyEmpty: { fontSize: 13, fontWeight: "500" },
   // Recent Games
   recentSection: { gap: 8 },
   sectionTitle: { fontSize: 12, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 1 },

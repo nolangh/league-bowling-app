@@ -20,7 +20,8 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
-import { useApp, type Game, type Ball, type FrameData } from "@/context/AppContext";
+import { useApp, type Game, type Ball, type FrameData, type AlleyPlace } from "@/context/AppContext";
+import { AlleyPicker } from "@/components/AlleyPicker";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
@@ -40,7 +41,6 @@ type Step =
   | "verifying";
 
 const OIL_PATTERNS = ["House Shot", "Sport Shot", "Challenge Pattern", "PBA Shot", "Other"];
-const ALLEYS = ["Bowlero Midtown", "AMF Pro Bowl", "Kings Bowl", "Sunset Lanes", "Other"];
 
 const EMPTY_FRAMES: FrameData[] = Array.from({ length: 10 }, () => ({
   ball1: null,
@@ -355,7 +355,9 @@ export default function LogScreen() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // Details state
-  const [alley, setAlley] = useState(ALLEYS[0]);
+  const [alley, setAlley] = useState<string>("");
+  const [alleyMeta, setAlleyMeta] = useState<AlleyPlace | null>(null);
+  const [alleyPickerOpen, setAlleyPickerOpen] = useState(false);
   const [oilPattern, setOilPattern] = useState(OIL_PATTERNS[0]);
   const [selectedBall, setSelectedBall] = useState<Ball | null>(null);
   const [notes, setNotes] = useState("");
@@ -378,7 +380,8 @@ export default function LogScreen() {
     setPhotoUri(null);
     setLocationMeta(null);
     setAnalyzeError(null);
-    setAlley(ALLEYS[0]);
+    setAlley("");
+    setAlleyMeta(null);
     setOilPattern(OIL_PATTERNS[0]);
     setSelectedBall(null);
     setNotes("");
@@ -609,7 +612,7 @@ export default function LogScreen() {
     await logGame({
       score,
       date: new Date().toISOString().split("T")[0],
-      alley,
+      alley: alley || alleyMeta?.name || "Unknown",
       oilPattern,
       ballUsed: selectedBall?.name ?? "",
       ballId: selectedBall ? Number(selectedBall.id) : null,
@@ -617,9 +620,9 @@ export default function LogScreen() {
       verified: !!photoUri,
       frames,
       scorecardImageUrl,
-      latitude: locationMeta?.latitude ?? null,
-      longitude: locationMeta?.longitude ?? null,
-      locationName: locationMeta?.locationName ?? null,
+      latitude: locationMeta?.latitude ?? alleyMeta?.lat ?? null,
+      longitude: locationMeta?.longitude ?? alleyMeta?.lng ?? null,
+      locationName: locationMeta?.locationName ?? alleyMeta?.address ?? alleyMeta?.name ?? null,
       capturedAt: locationMeta?.capturedAt ?? null,
       entryMethod: photoUri ? "photo" : "manual",
     } as Parameters<typeof logGame>[0]);
@@ -815,17 +818,50 @@ export default function LogScreen() {
           </View>
 
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ALLEY</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionRow}>
-            {ALLEYS.map((a) => (
-              <TouchableOpacity
-                key={a}
-                style={[styles.optionPill, { backgroundColor: alley === a ? colors.foreground : colors.secondary, borderColor: alley === a ? colors.foreground : colors.border }]}
-                onPress={() => setAlley(a)}
-              >
-                <Text style={[styles.optionPillText, { color: alley === a ? colors.background : colors.foreground }]}>{a}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <TouchableOpacity
+            style={[styles.alleySelectBtn, { backgroundColor: colors.card, borderColor: alley ? colors.primary : colors.border }]}
+            onPress={() => setAlleyPickerOpen(true)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.alleySelectIcon, { backgroundColor: colors.primary + "22" }]}>
+              <Feather name="map-pin" size={16} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              {alley ? (
+                <>
+                  <Text style={[styles.alleySelectName, { color: colors.foreground }]} numberOfLines={1}>{alley}</Text>
+                  {alleyMeta?.address && (
+                    <Text style={[styles.alleySelectAddr, { color: colors.mutedForeground }]} numberOfLines={1}>{alleyMeta.address}</Text>
+                  )}
+                </>
+              ) : (
+                <Text style={[styles.alleySelectPlaceholder, { color: colors.mutedForeground }]}>Search or use nearby</Text>
+              )}
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          {user.homeAlleyName && alley !== user.homeAlleyName && (
+            <TouchableOpacity
+              style={[styles.homeAlleyQuick, { borderColor: colors.border }]}
+              onPress={() => {
+                setAlley(user.homeAlleyName!);
+                setAlleyMeta({
+                  name: user.homeAlleyName!,
+                  address: null,
+                  lat: user.homeAlleyLat ?? null,
+                  lng: user.homeAlleyLng ?? null,
+                  osmId: user.homeAlleyOsmId ?? `home/${user.id}`,
+                });
+                Haptics.selectionAsync();
+              }}
+              activeOpacity={0.7}
+            >
+              <Feather name="home" size={12} color={colors.primary} />
+              <Text style={[styles.homeAlleyQuickText, { color: colors.foreground }]}>
+                Use my home alley · {user.homeAlleyName}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>OIL PATTERN</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionRow}>
@@ -960,6 +996,13 @@ export default function LogScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <AlleyPicker
+        visible={alleyPickerOpen}
+        onClose={() => setAlleyPickerOpen(false)}
+        onPick={(a) => { setAlley(a.name); setAlleyMeta(a); }}
+        title="Where did you bowl?"
+      />
     </View>
   );
 }
@@ -999,6 +1042,13 @@ const styles = StyleSheet.create({
   nextBtnText: { fontSize: 15, fontWeight: "800" },
   optionRow: { marginBottom: 4 },
   optionPill: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 },
+  alleySelectBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1.5 },
+  alleySelectIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  alleySelectName: { fontSize: 15, fontWeight: "700" },
+  alleySelectAddr: { fontSize: 12, marginTop: 2 },
+  alleySelectPlaceholder: { fontSize: 14, fontWeight: "500" },
+  homeAlleyQuick: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderStyle: "dashed", alignSelf: "flex-start" },
+  homeAlleyQuickText: { fontSize: 12, fontWeight: "600" },
   optionPillText: { fontSize: 13, fontWeight: "600" },
   centerBlock: { alignItems: "center", paddingVertical: 48, gap: 8 },
   // Method cards

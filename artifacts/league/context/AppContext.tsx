@@ -35,6 +35,20 @@ export interface UserProfile {
   releaseStyle?: string | null;
   gripStyle?: string | null;
   dominantHand?: string | null;
+  // Home alley
+  homeAlleyName?: string | null;
+  homeAlleyLat?: number | null;
+  homeAlleyLng?: number | null;
+  homeAlleyOsmId?: string | null;
+}
+
+export interface AlleyPlace {
+  name: string;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  osmId: string;
+  distanceKm?: number | null;
 }
 
 export interface Game {
@@ -255,6 +269,7 @@ interface AppContextValue {
   completeChallenge: (challengeId: string, acceptorScore: number) => Promise<{ result: "won" | "lost"; bsrChange: number } | null>;
   setUserPro: (isPro: boolean) => void;
   updateSpecs: (specs: Partial<Pick<UserProfile, "revRate"|"ballSpeed"|"axisTilt"|"axisRotation"|"papOver"|"papUp"|"releaseStyle"|"gripStyle"|"dominantHand">>) => Promise<void>;
+  setHomeAlley: (alley: AlleyPlace | null) => Promise<void>;
   joinLeague: (leagueId: string) => void;
   refreshAll: () => Promise<void>;
   sendFriendRequest: (userId: number) => Promise<void>;
@@ -330,6 +345,10 @@ type ApiUser = {
   releaseStyle?: string | null;
   gripStyle?: string | null;
   dominantHand?: string | null;
+  homeAlleyName?: string | null;
+  homeAlleyLat?: number | null;
+  homeAlleyLng?: number | null;
+  homeAlleyOsmId?: string | null;
 };
 
 function toGame(g: ApiGame): Game { return { ...g, id: String(g.id) }; }
@@ -412,6 +431,10 @@ function toUser(u: ApiUser): UserProfile {
     releaseStyle: u.releaseStyle ?? null,
     gripStyle:    u.gripStyle ?? null,
     dominantHand: u.dominantHand ?? null,
+    homeAlleyName:  u.homeAlleyName ?? null,
+    homeAlleyLat:   u.homeAlleyLat ?? null,
+    homeAlleyLng:   u.homeAlleyLng ?? null,
+    homeAlleyOsmId: u.homeAlleyOsmId ?? null,
   };
 }
 
@@ -714,6 +737,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* keep optimistic */ }
   };
 
+  const setHomeAlley = async (alley: AlleyPlace | null) => {
+    const patch = {
+      homeAlleyName:  alley?.name ?? null,
+      homeAlleyLat:   alley?.lat ?? null,
+      homeAlleyLng:   alley?.lng ?? null,
+      homeAlleyOsmId: alley?.osmId ?? null,
+    };
+    setUser((prev) => ({ ...prev, ...patch }));
+    try {
+      const updated = await api.patch<ApiUser>("/users/me", patch);
+      setUser(toUser(updated));
+    } catch { /* keep optimistic */ }
+  };
+
   const joinLeague = async (leagueId: string) => {
     try {
       const updated = await api.post<ApiLeague>(`/leagues/${leagueId}/join`);
@@ -765,7 +802,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
       balls, createBall, updateBall, deleteBall, refreshBalls,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
-      setUserPro, updateSpecs, joinLeague, refreshAll,
+      setUserPro, updateSpecs, setHomeAlley, joinLeague, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,
       inbox, inboxCount, fetchInbox, markInboxRead, reactToMoment, shareMoment,
     }}>

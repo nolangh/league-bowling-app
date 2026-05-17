@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { supabaseAdmin } from "../lib/supabase";
-import { GetMeResponse, UpdateMeBody } from "@workspace/api-zod";
+import { UpdateMeBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -9,7 +9,7 @@ router.get("/users/me", async (req, res): Promise<void> => {
     .from("users").select("*").eq("id", req.userId).single();
 
   if (error || !data) { res.status(404).json({ error: "User not found" }); return; }
-  res.json(GetMeResponse.parse(mapUser(data)));
+  res.json(mapUser(data));
 });
 
 router.get("/users/:id", async (req, res): Promise<void> => {
@@ -43,15 +43,36 @@ router.patch("/users/me", async (req, res): Promise<void> => {
   const parsed = UpdateMeBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const update = toSnake(parsed.data);
+
+  // Home alley fields (passed through outside Zod schema)
+  const body = req.body as Record<string, unknown>;
+  if ("homeAlleyName" in body) {
+    const v = body.homeAlleyName;
+    update.home_alley_name = typeof v === "string" && v.length > 0 && v.length <= 200 ? v : null;
+  }
+  if ("homeAlleyLat" in body) {
+    const v = body.homeAlleyLat;
+    update.home_alley_lat = typeof v === "number" && Number.isFinite(v) && v >= -90 && v <= 90 ? v : null;
+  }
+  if ("homeAlleyLng" in body) {
+    const v = body.homeAlleyLng;
+    update.home_alley_lng = typeof v === "number" && Number.isFinite(v) && v >= -180 && v <= 180 ? v : null;
+  }
+  if ("homeAlleyOsmId" in body) {
+    const v = body.homeAlleyOsmId;
+    update.home_alley_osm_id = typeof v === "string" && v.length > 0 && v.length <= 100 ? v : null;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("users")
-    .update(toSnake(parsed.data))
+    .update(update)
     .eq("id", req.userId)
     .select()
     .single();
 
   if (error || !data) { res.status(404).json({ error: "User not found" }); return; }
-  res.json(GetMeResponse.parse(mapUser(data)));
+  res.json(mapUser(data));
 });
 
 function mapUser(row: Record<string, unknown>) {
@@ -81,6 +102,10 @@ function mapUser(row: Record<string, unknown>) {
     releaseStyle:  row.release_style ?? null,
     gripStyle:     row.grip_style ?? null,
     dominantHand:  row.dominant_hand ?? null,
+    homeAlleyName: row.home_alley_name ?? null,
+    homeAlleyLat:  row.home_alley_lat ?? null,
+    homeAlleyLng:  row.home_alley_lng ?? null,
+    homeAlleyOsmId:row.home_alley_osm_id ?? null,
     createdAt:     row.created_at,
     updatedAt:     row.updated_at,
   };
