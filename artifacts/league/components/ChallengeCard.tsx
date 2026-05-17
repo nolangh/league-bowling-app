@@ -107,47 +107,47 @@ export function ChallengeCard({ challenge, onAccept, isOwn = false, onDelete, on
         {/* Action button */}
         {onMarkResult ? (
           <TouchableOpacity
-            style={[styles.markResultBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+            style={[styles.markResultBtn, { backgroundColor: "#ff5f1f18", borderColor: "#ff5f1f55" }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onMarkResult();
             }}
             activeOpacity={0.85}
           >
-            <Feather name="flag" size={13} color={colors.foreground} />
-            <Text style={[styles.markResultBtnText, { color: colors.foreground }]}>Submit Score</Text>
+            <Feather name="flag" size={13} color="#ff5f1f" />
+            <Text style={[styles.markResultBtnText, { color: "#ff5f1f" }]}>Submit Score</Text>
           </TouchableOpacity>
         ) : !isOwn && !result ? (
           <TouchableOpacity
-            style={[styles.acceptBtn, { backgroundColor: colors.primary }]}
+            style={[styles.acceptBtn, { backgroundColor: "#ff5f1f" }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onAccept?.();
             }}
             activeOpacity={0.85}
           >
-            <Feather name="zap" size={14} color={colors.primaryForeground} />
-            <Text style={[styles.acceptBtnText, { color: colors.primaryForeground }]}>Accept</Text>
+            <Feather name="zap" size={14} color="#ffffff" />
+            <Text style={[styles.acceptBtnText, { color: "#ffffff" }]}>Accept</Text>
           </TouchableOpacity>
         ) : isOwn && !result ? (
           <View
             style={[
               styles.statusBadge,
               {
-                backgroundColor: challenge.status === "open" ? colors.primary + "22" : "#f59e0b22",
-                borderColor: challenge.status === "open" ? colors.primary + "44" : "#f59e0b44",
+                backgroundColor: challenge.status === "open" ? "#ff5f1f22" : "#f59e0b22",
+                borderColor: challenge.status === "open" ? "#ff5f1f66" : "#f59e0b44",
               },
             ]}
           >
             <Feather
               name={challenge.status === "open" ? "circle" : "activity"}
               size={11}
-              color={challenge.status === "open" ? colors.primary : "#f59e0b"}
+              color={challenge.status === "open" ? "#ff5f1f" : "#f59e0b"}
             />
             <Text
               style={[
                 styles.statusBadgeText,
-                { color: challenge.status === "open" ? colors.primary : "#f59e0b" },
+                { color: challenge.status === "open" ? "#ff5f1f" : "#f59e0b" },
               ]}
             >
               {challenge.status === "open" ? "OPEN" : "ACTIVE"}

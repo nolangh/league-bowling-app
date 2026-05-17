@@ -20,6 +20,7 @@ const colors = {
     input: "#d0d0c4",
     darkCard: "#1a1a16",
     darkCardText: "#ffffff",
+    orange: "#ff5f1f",
     rankGold: "#f5c842",
     rankDiamond: "#60c8ff",
     rankPlatinum: "#c8a8e8",

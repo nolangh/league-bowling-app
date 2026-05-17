@@ -239,11 +239,11 @@ export default function LogScreen() {
                   ))}
                 </ScrollView>
                 <TouchableOpacity
-                  style={[styles.nextBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.nextBtn, { backgroundColor: "#ff5f1f" }]}
                   onPress={handleSubmit}
                   disabled={isLogging}
                 >
-                  <Text style={[styles.nextBtnText, { color: colors.primaryForeground }]}>
+                  <Text style={[styles.nextBtnText, { color: "#ffffff" }]}>
                     Submit & Verify
                   </Text>
                 </TouchableOpacity>

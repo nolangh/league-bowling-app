@@ -164,7 +164,7 @@ const RANK_COLORS: Record<Rank, string> = {
   Strike:  "#9fe870",
   Turkey:  "#f5c842",
   Perfect: "#60c8ff",
-  Legend:  "#ff6b35",
+  Legend:  "#ff5f1f",
 };
 
 export function getRankColor(rank: Rank | string): string {

@@ -35,7 +35,7 @@ interface LeaderboardEntry {
 
 type FilterType = "global" | "friends" | "team";
 
-const MEDAL_COLORS = ["#f5c842", "#c0c0c0", "#cd7f32"];
+const MEDAL_COLORS = ["#ff5f1f", "#c0c0c0", "#cd7f32"];
 
 function PositionBadge({ position, isMe }: { position: number; isMe: boolean }) {
   const colors = useColors();

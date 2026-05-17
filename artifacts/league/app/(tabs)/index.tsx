@@ -124,12 +124,12 @@ export default function ChallengesScreen() {
           </Text>
         </View>
         <TouchableOpacity
-          style={[styles.postBtn, { backgroundColor: colors.primary }]}
+          style={[styles.postBtn, { backgroundColor: "#ff5f1f" }]}
           onPress={() => setPostModalVisible(true)}
           activeOpacity={0.85}
         >
-          <Feather name="plus" size={16} color={colors.primaryForeground} />
-          <Text style={[styles.postBtnText, { color: colors.primaryForeground }]}>Post</Text>
+          <Feather name="plus" size={16} color="#ffffff" />
+          <Text style={[styles.postBtnText, { color: "#ffffff" }]}>Post</Text>
         </TouchableOpacity>
       </View>
 

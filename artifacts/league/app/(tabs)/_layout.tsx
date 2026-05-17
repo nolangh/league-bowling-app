@@ -87,8 +87,13 @@ export default function TabLayout() {
               name={name}
               options={{
                 title,
-                tabBarIcon: ({ color }) => (
-                  <Feather name={TAB_ICONS[name]} size={22} color={color} />
+                ...(name === "log" ? { tabBarActiveTintColor: "#ff5f1f" } : {}),
+                tabBarIcon: ({ color, focused }) => (
+                  <Feather
+                    name={TAB_ICONS[name]}
+                    size={name === "log" && focused ? 26 : 22}
+                    color={color}
+                  />
                 ),
               }}
             />
