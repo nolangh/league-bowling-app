@@ -2,11 +2,12 @@ import React, { createContext, useContext, useEffect, useState, useRef } from "r
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
+// ── Rank system (BSR-based) ───────────────────────────────────────────────────
+// Gutter <1000 | Spare 1000-1199 | Strike 1200-1399 |
+// Turkey 1400-1599 | Perfect 1600-1799 | Legend 1800+
+
 export type Rank =
-  | "Rookie" | "Amateur" | "Intermediate" | "Advanced"
-  | "Expert" | "Elite" | "Diamond IV" | "Diamond III"
-  | "Diamond II" | "Diamond I" | "Platinum II" | "Platinum I"
-  | "Legend" | "Kingpin";
+  | "Gutter" | "Spare" | "Strike" | "Turkey" | "Perfect" | "Legend";
 
 export interface UserProfile {
   id?: number;
@@ -21,12 +22,9 @@ export interface UserProfile {
   highGame: number;
   totalGames: number;
   team: string;
-  rating: number;
+  bsr: number;
   wins: number;
   losses: number;
-  earnings: number;
-  paymentProvider?: string;
-  paymentHandle?: string;
 }
 
 export interface Game {
@@ -46,7 +44,10 @@ export interface Challenge {
   rank: Rank;
   rankColor: string;
   postedScore: number;
-  stake: number;
+  posterBsr?: number;
+  acceptorBsr?: number;
+  acceptorFinalScore?: number;
+  notes?: string;
   timeAgo: string;
   isPro: boolean;
   status: "open" | "active" | "completed" | "cancelled";
@@ -54,14 +55,13 @@ export interface Challenge {
   avatarColor: string;
   isOwn?: boolean;
   progress?: number;
-  matchesRequired?: number;
-  matchesPlayed?: number;
   description?: string;
   acceptorId?: number;
   acceptorUsername?: string;
   winnerId?: number;
   completedAt?: string;
   result?: "won" | "lost";
+  bsrChange?: number;
 }
 
 export interface Moment {
@@ -108,7 +108,7 @@ export interface Friend {
   name: string;
   rank: Rank;
   rankColor: string;
-  rating: number;
+  bsr: number;
   careerAvg: number;
   highGame: number;
   isPro: boolean;
@@ -125,7 +125,7 @@ export interface LeaderboardEntry {
   name: string;
   rank: Rank;
   rankColor: string;
-  rating: number;
+  bsr: number;
   careerAvg: number;
   highGame: number;
   totalGames: number;
@@ -148,25 +148,24 @@ export interface League {
   joined?: boolean;
 }
 
-const RANK_COLORS: Record<string, string> = {
-  Rookie: "#a0a0a0", Amateur: "#a0a0a0",
-  Intermediate: "#a8c870", Advanced: "#a8c870",
-  Expert: "#f5c842", Elite: "#f5c842",
-  "Diamond IV": "#60c8ff", "Diamond III": "#60c8ff",
-  "Diamond II": "#60c8ff", "Diamond I": "#60c8ff",
-  "Platinum II": "#c8a8e8", "Platinum I": "#c8a8e8",
-  Legend: "#9fe870", Kingpin: "#ff6b35",
+const RANK_COLORS: Record<Rank, string> = {
+  Gutter:  "#a0a0a0",
+  Spare:   "#a8d8a8",
+  Strike:  "#9fe870",
+  Turkey:  "#f5c842",
+  Perfect: "#60c8ff",
+  Legend:  "#ff6b35",
 };
 
 export function getRankColor(rank: Rank | string): string {
-  return RANK_COLORS[rank] ?? "#a0a0a0";
+  return RANK_COLORS[rank as Rank] ?? "#a0a0a0";
 }
 
 const FALLBACK_USER: UserProfile = {
-  name: "Bowler", username: "BOWLER", rank: "Rookie",
+  name: "Bowler", username: "BOWLER", rank: "Strike",
   level: 1, xp: 0, xpToNext: 1000, isPro: false,
-  careerAvg: 0, highGame: 0, totalGames: 0, team: "Solo", rating: 1000,
-  wins: 0, losses: 0, earnings: 0,
+  careerAvg: 0, highGame: 0, totalGames: 0, team: "Solo",
+  bsr: 1200, wins: 0, losses: 0,
 };
 
 interface AppContextValue {
@@ -186,14 +185,12 @@ interface AppContextValue {
   unsaveMoment: (momentId: string) => Promise<void>;
   postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[]) => Promise<void>;
   acceptChallenge: (challengeId: string) => void;
-  postChallenge: (score: number, stake: number) => void;
+  postChallenge: (score: number, notes?: string) => void;
   deleteChallenge: (challengeId: string) => Promise<void>;
-  completeChallenge: (challengeId: string, result: "won" | "lost") => Promise<void>;
+  completeChallenge: (challengeId: string, acceptorScore: number) => Promise<{ result: "won" | "lost"; bsrChange: number } | null>;
   setUserPro: (isPro: boolean) => void;
-  updatePaymentInfo: (provider: string, handle: string) => Promise<void>;
   joinLeague: (leagueId: string) => void;
   refreshAll: () => Promise<void>;
-  // Friends
   sendFriendRequest: (userId: number) => Promise<void>;
   acceptFriendRequest: (userId: number) => Promise<void>;
   removeFriend: (userId: number) => Promise<void>;
@@ -207,13 +204,16 @@ type ApiGame = {
 };
 type ApiChallenge = {
   id: number; username: string; rank: string; rankColor: string;
-  postedScore: number; stake: number; timeAgo: string; isPro: boolean;
+  postedScore: number; posterBsr?: number; acceptorBsr?: number;
+  acceptorFinalScore?: number; notes?: string;
+  timeAgo: string; isPro: boolean;
   status: string; initials: string; avatarColor: string;
   acceptorId?: number | null;
   acceptorUsername?: string | null;
   winnerId?: number | null;
   completedAt?: string | null;
   result?: "won" | "lost";
+  bsrChange?: number;
 };
 type ApiMoment = {
   id: number; userId?: number; username: string; rank: string; rankColor: string;
@@ -231,24 +231,32 @@ type ApiUser = {
   id: number; name: string; username: string; rank: string;
   level: number; xp: number; xpToNext: number; isPro: boolean;
   careerAvg: number; highGame: number; totalGames: number;
-  team: string; rating: number;
-  wins: number; losses: number; earnings: number;
-  paymentProvider?: string | null;
-  paymentHandle?: string | null;
+  team: string; bsr: number; wins: number; losses: number;
 };
 
 function toGame(g: ApiGame): Game { return { ...g, id: String(g.id) }; }
 function toChallenge(c: ApiChallenge): Challenge {
   return {
-    ...c,
-    id: String(c.id),
-    rank: c.rank as Rank,
-    status: c.status as Challenge["status"],
-    acceptorId: c.acceptorId ?? undefined,
-    acceptorUsername: c.acceptorUsername ?? undefined,
-    winnerId: c.winnerId ?? undefined,
-    completedAt: c.completedAt ?? undefined,
-    result: c.result,
+    id:                 String(c.id),
+    username:           c.username,
+    rank:               c.rank as Rank,
+    rankColor:          c.rankColor,
+    postedScore:        c.postedScore,
+    posterBsr:          c.posterBsr ?? undefined,
+    acceptorBsr:        c.acceptorBsr ?? undefined,
+    acceptorFinalScore: c.acceptorFinalScore ?? undefined,
+    notes:              c.notes ?? undefined,
+    timeAgo:            c.timeAgo,
+    isPro:              c.isPro,
+    status:             c.status as Challenge["status"],
+    initials:           c.initials,
+    avatarColor:        c.avatarColor,
+    acceptorId:         c.acceptorId ?? undefined,
+    acceptorUsername:   c.acceptorUsername ?? undefined,
+    winnerId:           c.winnerId ?? undefined,
+    completedAt:        c.completedAt ?? undefined,
+    result:             c.result,
+    bsrChange:          c.bsrChange,
   };
 }
 function toMoment(m: ApiMoment): Moment {
@@ -271,12 +279,10 @@ function toLeague(l: ApiLeague): League {
 function toUser(u: ApiUser): UserProfile {
   return {
     ...u,
-    rank: u.rank as Rank,
-    wins: u.wins ?? 0,
+    rank:  u.rank as Rank,
+    bsr:   u.bsr ?? 1200,
+    wins:  u.wins ?? 0,
     losses: u.losses ?? 0,
-    earnings: u.earnings ?? 0,
-    paymentProvider: u.paymentProvider ?? undefined,
-    paymentHandle: u.paymentHandle ?? undefined,
   };
 }
 
@@ -319,9 +325,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           saves: raw.save_count ?? 0,
           tags: raw.tags ?? [],
           timeAgo: "just now",
-          liked: false,
-          disliked: false,
-          saved: false,
+          liked: false, disliked: false, saved: false,
           initials: raw.initials ?? raw.username.slice(0, 2),
           avatarColor: raw.avatar_color ?? raw.avatarColor ?? "#1a3c2a",
           createdAt: raw.created_at,
@@ -354,9 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (completedChallRes.status === "fulfilled") setCompletedChallenges(completedChallRes.value.map(toChallenge));
       if (momentsRes.status === "fulfilled") setMoments(momentsRes.value.map(toMoment));
       if (leaguesRes.status === "fulfilled") setLeagues(leaguesRes.value.map(toLeague));
-    } catch {
-      // keep fallback state
-    }
+    } catch { /* keep fallback state */ }
   }
 
   const logGame = async (gameData: Omit<Game, "id">) => {
@@ -436,18 +438,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         username: user.username,
         rank: user.rank,
         rankColor: getRankColor(user.rank),
-        content,
-        score,
-        type,
-        likes: 0,
-        comments: 0,
-        dislikes: 0,
-        saves: 0,
+        content, score, type,
+        likes: 0, comments: 0, dislikes: 0, saves: 0,
         tags: tags ?? [],
         timeAgo: "just now",
-        liked: false,
-        disliked: false,
-        saved: false,
+        liked: false, disliked: false, saved: false,
         initials: user.username.substring(0, 2),
         avatarColor: "#1a3c2a",
       };
@@ -456,14 +451,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const acceptChallenge = async (challengeId: string) => {
-    // Optimistically remove from open list
     setChallenges((prev) => prev.filter((c) => c.id !== challengeId));
     try {
       const accepted = await api.post<ApiChallenge>(`/challenges/${challengeId}/accept`);
-      // Add to active (accepted) list
       setAcceptedChallenges((prev) => [toChallenge(accepted), ...prev]);
     } catch {
-      // Re-fetch open challenges if it failed
       try {
         const refreshed = await api.get<ApiChallenge[]>("/challenges");
         setChallenges(refreshed.map(toChallenge));
@@ -471,9 +463,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const postChallenge = async (score: number, stake: number) => {
+  const postChallenge = async (score: number, notes?: string) => {
     try {
-      const created = await api.post<ApiChallenge>("/challenges", { postedScore: score, stake });
+      const created = await api.post<ApiChallenge>("/challenges", { postedScore: score, notes });
       setMyActiveChallenges((prev) => [toChallenge(created), ...prev]);
     } catch {
       const newChallenge: Challenge = {
@@ -482,7 +474,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         rank: user.rank,
         rankColor: getRankColor(user.rank),
         postedScore: score,
-        stake,
+        posterBsr: user.bsr,
+        notes,
         timeAgo: "just now",
         isPro: user.isPro,
         status: "open",
@@ -499,34 +492,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.delete(`/challenges/${challengeId}`);
     } catch {
-      // If delete fails, re-fetch to restore
       const refreshed = await api.get<ApiChallenge[]>("/challenges/my");
       setMyActiveChallenges(refreshed.map(toChallenge));
     }
   };
 
-  const completeChallenge = async (challengeId: string, result: "won" | "lost") => {
+  const completeChallenge = async (challengeId: string, acceptorScore: number) => {
     try {
-      const completed = await api.post<ApiChallenge>(`/challenges/${challengeId}/complete`, { result });
+      const completed = await api.post<ApiChallenge & { result: "won" | "lost"; bsrChange: number }>(
+        `/challenges/${challengeId}/complete`,
+        { acceptorFinalScore: acceptorScore },
+      );
       setAcceptedChallenges((prev) => prev.filter((c) => c.id !== challengeId));
       setCompletedChallenges((prev) => [toChallenge(completed), ...prev]);
       const updatedUser = await api.get<ApiUser>("/users/me");
       setUser(toUser(updatedUser));
-    } catch { /* ignore */ }
+      return { result: completed.result, bsrChange: completed.bsrChange };
+    } catch { return null; }
   };
 
   const setUserPro = async (isPro: boolean) => {
     setUser((prev) => ({ ...prev, isPro }));
     try {
       const updated = await api.patch<ApiUser>("/users/me", { isPro });
-      setUser(toUser(updated));
-    } catch { /* keep optimistic */ }
-  };
-
-  const updatePaymentInfo = async (provider: string, handle: string) => {
-    setUser((prev) => ({ ...prev, paymentProvider: provider, paymentHandle: handle }));
-    try {
-      const updated = await api.patch<ApiUser>("/users/me", { paymentProvider: provider, paymentHandle: handle });
       setUser(toUser(updated));
     } catch { /* keep optimistic */ }
   };
@@ -556,7 +544,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       moments, leagues, loading,
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
-      setUserPro, updatePaymentInfo, joinLeague, refreshAll,
+      setUserPro, joinLeague, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,
     }}>
       {children}

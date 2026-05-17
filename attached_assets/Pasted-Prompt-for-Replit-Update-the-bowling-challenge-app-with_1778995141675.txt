@@ -1,0 +1,69 @@
+Prompt for Replit:
+Update the bowling challenge app with the following skill-based progression system. Do not implement any in-app currency or Strike Points yet. Focus on BSR and Ranks only.
+Data Models to create/update:
+User
+id, username, avatar
+bsr (default 1200)
+rank (string)
+games_played, wins, losses
+created_at
+Challenge
+id
+poster_id
+posted_score
+scorecard_photo_url
+status ("open", "accepted", "completed")
+acceptor_id (nullable)
+acceptor_empty_scorecard_url
+acceptor_final_score
+acceptor_scorecard_photo_url
+winner_id (nullable)
+created_at, accepted_at, completed_at
+notes (optional)
+Rank Thresholds (update rank automatically when BSR changes):
+Gutter: < 1000
+Spare: 1000–1199
+Strike: 1200–1399
+Turkey: 1400–1599
+Perfect: 1600–1799
+Legend: 1800+
+Elo Rating System (implement this logic):
+New users start at 1200 BSR
+K-factor = 40 if games_played < 10, else 28
+Use standard Elo formula:
+expected = 1 / (1 + 10 ** ((opponent_bsr - my_bsr) / 400))
+After match: new_bsr = old_bsr + K * (1 if win else 0 - expected)
+Update both players’ BSR after every completed challenge
+Log changes if possible
+Challenge Flow:
+Post Challenge:
+Upload photo of completed scorecard (required)
+Enter score
+Optional notes
+Challenge goes into "open" status
+Browse Challenges:
+Only show open challenges where the poster’s BSR is within ±300 of the current user
+Display poster’s current rank badge + BSR + score + notes
+Accept Challenge:
+User must upload a photo of an empty scorecard first
+Change status to "accepted"
+Complete Challenge:
+Acceptor uploads completed scorecard + enters score
+Compare scores → higher score wins
+Update BSR for both players using Elo formula
+Update ranks if thresholds are crossed
+Update win/loss counts
+Show result screen with BSR change
+Profile Screen:
+Large BSR number
+Current Rank with visual badge/color
+Stats (games, win rate, highest score posted)
+Recent challenge history
+Additional Features:
+Leaderboard sorted by BSR (with option to filter by rank)
+Prevent challenging the same user too frequently (basic cooldown)
+Basic report button on challenges
+Make sure new users have a placement period with higher rating volatility
+Future-Proofing Notes (add comments in code):
+Leave clear structure so a virtual currency system (for future bowling alley redemptions) can be added later without major refactoring.
+Keep challenge and user models modular.

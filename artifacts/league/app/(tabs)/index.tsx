@@ -22,10 +22,10 @@ import { ChallengeCard } from "@/components/ChallengeCard";
 type Tab = "open" | "mine" | "accepted" | "history";
 
 const TAB_LABELS: Record<Tab, string> = {
-  open: "OPEN",
-  mine: "MY POSTS",
+  open:     "OPEN",
+  mine:     "MY POSTS",
   accepted: "ACTIVE",
-  history: "HISTORY",
+  history:  "HISTORY",
 };
 
 export default function ChallengesScreen() {
@@ -33,26 +33,28 @@ export default function ChallengesScreen() {
   const insets = useSafeAreaInsets();
   const {
     challenges, myActiveChallenges, acceptedChallenges, completedChallenges,
-    postChallenge, acceptChallenge, deleteChallenge, completeChallenge,
+    postChallenge, acceptChallenge, deleteChallenge, completeChallenge, user,
   } = useApp();
 
   const [tab, setTab] = useState<Tab>("open");
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [acceptModalVisible, setAcceptModalVisible] = useState(false);
-  const [resultModalVisible, setResultModalVisible] = useState(false);
+  const [scoreModalVisible, setScoreModalVisible] = useState(false);
   const [postScore, setPostScore] = useState("");
-  const [postStake, setPostStake] = useState(25);
+  const [postNotes, setPostNotes] = useState("");
   const [postModalVisible, setPostModalVisible] = useState(false);
+  const [submitScore, setSubmitScore] = useState("");
+  const [scoreResult, setScoreResult] = useState<{ result: "won" | "lost"; bsrChange: number } | null>(null);
+  const [resultVisible, setResultVisible] = useState(false);
 
   const tabData: Record<Tab, Challenge[]> = {
-    open: challenges,
-    mine: myActiveChallenges,
+    open:     challenges,
+    mine:     myActiveChallenges,
     accepted: acceptedChallenges,
-    history: completedChallenges,
+    history:  completedChallenges,
   };
 
   const handleAccept = (c: Challenge) => { setSelectedChallenge(c); setAcceptModalVisible(true); };
-
   const confirmAccept = () => {
     if (selectedChallenge) {
       acceptChallenge(selectedChallenge.id);
@@ -62,14 +64,26 @@ export default function ChallengesScreen() {
     setSelectedChallenge(null);
   };
 
-  const handleMarkResult = (c: Challenge) => { setSelectedChallenge(c); setResultModalVisible(true); };
+  const handleMarkResult = (c: Challenge) => {
+    setSelectedChallenge(c);
+    setSubmitScore("");
+    setScoreModalVisible(true);
+  };
 
-  const confirmResult = async (result: "won" | "lost") => {
-    if (selectedChallenge) {
-      await completeChallenge(selectedChallenge.id, result);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const confirmScore = async () => {
+    const score = parseInt(submitScore);
+    if (!selectedChallenge || isNaN(score) || score < 0 || score > 300) return;
+    setScoreModalVisible(false);
+    const outcome = await completeChallenge(selectedChallenge.id, score);
+    if (outcome) {
+      setScoreResult(outcome);
+      setResultVisible(true);
+      Haptics.notificationAsync(
+        outcome.result === "won"
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Error,
+      );
     }
-    setResultModalVisible(false);
     setSelectedChallenge(null);
   };
 
@@ -80,35 +94,33 @@ export default function ChallengesScreen() {
 
   const handlePost = () => {
     const score = parseInt(postScore);
-    if (!score || score < 100 || score > 300) return;
-    postChallenge(score, postStake);
+    if (!score || score < 0 || score > 300) return;
+    postChallenge(score, postNotes.trim() || undefined);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPostModalVisible(false);
     setPostScore("");
-    setPostStake(25);
+    setPostNotes("");
     setTab("mine");
   };
 
-  const STAKES = [10, 25, 50, 75, 100, 150, 200];
-
   const EMPTY: Record<Tab, { icon: keyof typeof Feather.glyphMap; text: string }> = {
-    open: { icon: "zap-off", text: "No open challenges right now" },
-    mine: { icon: "target", text: "Post a challenge to get started" },
+    open:     { icon: "zap-off",  text: "No open challenges in your BSR range" },
+    mine:     { icon: "target",   text: "Post a challenge to get started" },
     accepted: { icon: "activity", text: "Accept a challenge to see it here" },
-    history: { icon: "archive", text: "Completed challenges appear here" },
+    history:  { icon: "archive",  text: "Completed challenges appear here" },
   };
 
   const currentList = tabData[tab];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} />
+      <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }} />
       {/* Header */}
       <View style={[styles.header, { paddingTop: 12, backgroundColor: colors.background }]}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>CHALLENGES</Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            Skill-based money matches
+            BSR {user.bsr} · {user.rank}
           </Text>
         </View>
         <TouchableOpacity
@@ -123,8 +135,7 @@ export default function ChallengesScreen() {
 
       {/* Tab Row */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+        horizontal showsHorizontalScrollIndicator={false}
         style={[styles.tabScrollRow, { backgroundColor: colors.background }]}
         contentContainerStyle={[styles.tabScrollContent, { borderBottomColor: colors.border }]}
       >
@@ -196,13 +207,13 @@ export default function ChallengesScreen() {
                     <Text style={[styles.challengePreviewScore, { color: colors.foreground }]}>
                       {selectedChallenge.postedScore}
                     </Text>
-                    <Text style={[styles.stakeAmount, { color: colors.primary }]}>
-                      ${selectedChallenge.stake}
+                    <Text style={[styles.bsrTag, { color: colors.primary }]}>
+                      {selectedChallenge.posterBsr} BSR
                     </Text>
                   </View>
                 </View>
                 <Text style={[styles.sheetNote, { color: colors.mutedForeground }]}>
-                  You'll be matched when your game score is verified. Funds are held in escrow until the match resolves.
+                  Bowl your game and submit your score. The higher score wins — BSR updates automatically using the Elo system.
                 </Text>
                 <TouchableOpacity
                   style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
@@ -210,7 +221,7 @@ export default function ChallengesScreen() {
                   activeOpacity={0.85}
                 >
                   <Text style={[styles.confirmBtnText, { color: colors.primaryForeground }]}>
-                    Accept — ${selectedChallenge.stake} stake
+                    Accept Challenge
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setAcceptModalVisible(false)} style={styles.cancelBtn}>
@@ -222,12 +233,12 @@ export default function ChallengesScreen() {
         </Pressable>
       </Modal>
 
-      {/* Mark Result Modal */}
-      <Modal visible={resultModalVisible} transparent animationType="slide">
-        <Pressable style={styles.overlay} onPress={() => setResultModalVisible(false)}>
+      {/* Submit Score Modal */}
+      <Modal visible={scoreModalVisible} transparent animationType="slide">
+        <Pressable style={styles.overlay} onPress={() => setScoreModalVisible(false)}>
           <Pressable style={[styles.bottomSheet, { backgroundColor: colors.card }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Mark Result</Text>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Submit Your Score</Text>
             {selectedChallenge && (
               <>
                 <View style={[styles.challengePreview, { backgroundColor: colors.secondary }]}>
@@ -238,42 +249,75 @@ export default function ChallengesScreen() {
                     <Text style={[styles.challengePreviewName, { color: colors.foreground }]}>
                       vs {selectedChallenge.username}
                     </Text>
-                    <Text style={[styles.stakeAmount, { color: colors.primary }]}>
-                      ${selectedChallenge.stake} stake
+                    <Text style={[styles.bsrTag, { color: colors.mutedForeground }]}>
+                      Their score: {selectedChallenge.postedScore}
                     </Text>
                   </View>
-                  <Text style={[styles.challengePreviewScore, { color: colors.foreground }]}>
-                    {selectedChallenge.postedScore}
-                  </Text>
                 </View>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>YOUR FINAL SCORE</Text>
+                <TextInput
+                  style={[styles.scoreInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+                  placeholder="e.g. 241"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                  value={submitScore}
+                  onChangeText={setSubmitScore}
+                  maxLength={3}
+                  autoFocus
+                />
                 <Text style={[styles.sheetNote, { color: colors.mutedForeground }]}>
-                  Record your honest result. Stats and earnings update immediately.
+                  The higher score wins. BSR updates automatically — no self-reporting bias.
                 </Text>
-                <View style={styles.resultBtns}>
-                  <TouchableOpacity
-                    style={[styles.resultBtn, { backgroundColor: "#22c55e" }]}
-                    onPress={() => confirmResult("won")}
-                    activeOpacity={0.85}
-                  >
-                    <Feather name="trending-up" size={20} color="#fff" />
-                    <Text style={styles.resultBtnText}>I WON</Text>
-                    <Text style={styles.resultBtnSub}>+${selectedChallenge.stake}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.resultBtn, { backgroundColor: "#ef4444" }]}
-                    onPress={() => confirmResult("lost")}
-                    activeOpacity={0.85}
-                  >
-                    <Feather name="trending-down" size={20} color="#fff" />
-                    <Text style={styles.resultBtnText}>I LOST</Text>
-                    <Text style={styles.resultBtnSub}>-${selectedChallenge.stake}</Text>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity onPress={() => setResultModalVisible(false)} style={styles.cancelBtn}>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, {
+                    backgroundColor:
+                      submitScore && parseInt(submitScore) >= 0 && parseInt(submitScore) <= 300
+                        ? colors.primary : colors.muted,
+                  }]}
+                  onPress={confirmScore}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.confirmBtnText, { color: colors.primaryForeground }]}>
+                    Submit Score
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setScoreModalVisible(false)} style={styles.cancelBtn}>
                   <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
                 </TouchableOpacity>
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Result Modal */}
+      <Modal visible={resultVisible} transparent animationType="fade">
+        <Pressable style={styles.overlay} onPress={() => setResultVisible(false)}>
+          <Pressable style={[styles.resultCard, { backgroundColor: colors.card }]}>
+            <View style={[
+              styles.resultIconCircle,
+              { backgroundColor: scoreResult?.result === "won" ? "#22c55e22" : "#ef444422" },
+            ]}>
+              <Feather
+                name={scoreResult?.result === "won" ? "trending-up" : "trending-down"}
+                size={36}
+                color={scoreResult?.result === "won" ? "#22c55e" : "#ef4444"}
+              />
+            </View>
+            <Text style={[styles.resultHeading, { color: scoreResult?.result === "won" ? "#22c55e" : "#ef4444" }]}>
+              {scoreResult?.result === "won" ? "YOU WON!" : "YOU LOST"}
+            </Text>
+            {scoreResult && (
+              <Text style={[styles.resultBsrLine, { color: colors.foreground }]}>
+                BSR {scoreResult.bsrChange >= 0 ? "+" : ""}{scoreResult.bsrChange}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setResultVisible(false)}
+            >
+              <Text style={[styles.confirmBtnText, { color: colors.primaryForeground }]}>Done</Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
@@ -294,30 +338,20 @@ export default function ChallengesScreen() {
               onChangeText={setPostScore}
               maxLength={3}
             />
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>STAKE AMOUNT</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stakePicker}>
-              {STAKES.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[
-                    styles.stakePill,
-                    {
-                      backgroundColor: postStake === s ? colors.primary : colors.secondary,
-                      borderColor: postStake === s ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setPostStake(s)}
-                >
-                  <Text style={[styles.stakePillText, { color: postStake === s ? colors.primaryForeground : colors.foreground }]}>
-                    ${s}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>NOTES (OPTIONAL)</Text>
+            <TextInput
+              style={[styles.notesInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
+              placeholder="e.g. Shot 265 at AMF, freshly oiled…"
+              placeholderTextColor={colors.mutedForeground}
+              value={postNotes}
+              onChangeText={setPostNotes}
+              multiline
+              maxLength={120}
+            />
             <TouchableOpacity
               style={[styles.confirmBtn, {
                 backgroundColor:
-                  postScore && parseInt(postScore) >= 100 && parseInt(postScore) <= 300
+                  postScore && parseInt(postScore) >= 0 && parseInt(postScore) <= 300
                     ? colors.primary : colors.muted,
               }]}
               onPress={handlePost}
@@ -353,13 +387,9 @@ const styles = StyleSheet.create({
   tabScrollRow: { flexGrow: 0 },
   tabScrollContent: { paddingHorizontal: 12, borderBottomWidth: 1 },
   tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 12, paddingHorizontal: 10,
+    borderBottomWidth: 2, borderBottomColor: "transparent",
   },
   tabText: { fontSize: 12, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 1 },
   tabBadge: { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, justifyContent: "center", alignItems: "center" },
@@ -369,10 +399,8 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, fontFamily: "DMSans_500Medium" },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   bottomSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    gap: 16,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, gap: 16,
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 8 },
@@ -382,7 +410,7 @@ const styles = StyleSheet.create({
   avatarText: { color: "#fff", fontFamily: "BarlowCondensed_700Bold", fontSize: 15 },
   challengePreviewName: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
   challengePreviewScore: { fontSize: 26, fontFamily: "BarlowCondensed_800ExtraBold" },
-  stakeAmount: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
+  bsrTag: { fontSize: 13, fontFamily: "BarlowCondensed_700Bold" },
   sheetNote: { fontSize: 13, lineHeight: 20, fontFamily: "DMSans_400Regular" },
   confirmBtn: { borderRadius: 50, paddingVertical: 16, alignItems: "center" },
   confirmBtnText: { fontSize: 16, fontFamily: "BarlowCondensed_700Bold" },
@@ -390,18 +418,24 @@ const styles = StyleSheet.create({
   cancelBtnText: { fontSize: 14, fontFamily: "DMSans_500Medium" },
   fieldLabel: { fontSize: 11, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 1 },
   scoreInput: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    fontSize: 22,
-    fontFamily: "BarlowCondensed_700Bold",
-    textAlign: "center",
+    borderWidth: 1, borderRadius: 14, padding: 14,
+    fontSize: 22, fontFamily: "BarlowCondensed_700Bold", textAlign: "center",
   },
-  stakePicker: { marginBottom: 4 },
-  stakePill: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 18, paddingVertical: 10, marginRight: 8 },
-  stakePillText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
-  resultBtns: { flexDirection: "row", gap: 12 },
-  resultBtn: { flex: 1, borderRadius: 16, padding: 18, alignItems: "center", gap: 6 },
-  resultBtnText: { fontSize: 20, fontFamily: "BarlowCondensed_800ExtraBold", color: "#fff" },
-  resultBtnSub: { fontSize: 13, fontFamily: "BarlowCondensed_600SemiBold", color: "rgba(255,255,255,0.85)" },
+  notesInput: {
+    borderWidth: 1, borderRadius: 14, padding: 14,
+    fontSize: 14, fontFamily: "DMSans_400Regular",
+    minHeight: 72, textAlignVertical: "top",
+  },
+  resultCard: {
+    marginHorizontal: 32, borderRadius: 28,
+    padding: 32, gap: 16, alignItems: "center",
+    alignSelf: "center", width: "85%",
+    marginTop: "auto", marginBottom: "auto",
+  },
+  resultIconCircle: {
+    width: 80, height: 80, borderRadius: 40,
+    justifyContent: "center", alignItems: "center",
+  },
+  resultHeading: { fontSize: 32, fontFamily: "BarlowCondensed_800ExtraBold" },
+  resultBsrLine: { fontSize: 22, fontFamily: "BarlowCondensed_700Bold" },
 });

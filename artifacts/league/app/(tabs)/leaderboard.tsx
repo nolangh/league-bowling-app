@@ -22,7 +22,7 @@ interface LeaderboardEntry {
   name: string;
   rank: Rank;
   rankColor: string;
-  rating: number;
+  bsr: number;
   careerAvg: number;
   highGame: number;
   totalGames: number;
@@ -92,8 +92,8 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
       </View>
 
       <View style={styles.rowStats}>
-        <Text style={[styles.rowRating, { color: colors.foreground }]}>{entry.rating}</Text>
-        <Text style={[styles.rowStatLabel, { color: colors.mutedForeground }]}>RATING</Text>
+        <Text style={[styles.rowRating, { color: colors.foreground }]}>{entry.bsr}</Text>
+        <Text style={[styles.rowStatLabel, { color: colors.mutedForeground }]}>BSR</Text>
         <Text style={[styles.rowAvg, { color: colors.mutedForeground }]}>avg {entry.careerAvg}</Text>
       </View>
     </View>
@@ -200,7 +200,7 @@ export default function LeaderboardScreen() {
           <View style={styles.myPositionRow}>
             <Text style={[styles.myPositionNum, { color: colors.primary }]}>#{myEntry.position}</Text>
             <Text style={[styles.myPositionRating, { color: colors.foreground }]}>
-              {myEntry.rating} rating · {myEntry.careerAvg} avg
+              {myEntry.bsr} BSR · {myEntry.careerAvg} avg
             </Text>
           </View>
         </View>

@@ -8,7 +8,6 @@ import {
   Modal,
   Pressable,
   Platform,
-  TextInput,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -20,26 +19,20 @@ import { useApp, getRankColor } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { useSubscription } from "@/lib/revenuecat";
 
-const PAYMENT_PROVIDERS = ["Venmo", "Cash App", "Zelle", "PayPal", "Apple Pay"];
-
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, games, setUserPro, updatePaymentInfo } = useApp();
+  const { user, games, setUserPro } = useApp();
   const { isSubscribed, offerings, purchase, isPurchasing, restore, isRestoring, isConfigured } = useSubscription();
 
   const [proModalVisible, setProModalVisible] = useState(false);
   const [purchaseConfirmVisible, setPurchaseConfirmVisible] = useState(false);
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState(user.paymentProvider ?? "");
-  const [paymentHandle, setPaymentHandle] = useState(user.paymentHandle ?? "");
 
   const rankColor = getRankColor(user.rank);
   const xpPct = user.xp / user.xpToNext;
   const totalChallenges = (user.wins ?? 0) + (user.losses ?? 0);
   const winRate = totalChallenges > 0 ? Math.round(((user.wins ?? 0) / totalChallenges) * 100) : 0;
-  const earnings = user.earnings ?? 0;
 
   const currentOffering = offerings?.current;
   const packageToPurchase = currentOffering?.availablePackages[0];
@@ -77,30 +70,17 @@ export default function ProfileScreen() {
     } catch {}
   };
 
-  const handleSavePayment = async () => {
-    if (!selectedProvider || !paymentHandle.trim()) return;
-    await updatePaymentInfo(selectedProvider, paymentHandle.trim());
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setPaymentModalVisible(false);
-  };
-
-  const openPaymentModal = () => {
-    setSelectedProvider(user.paymentProvider ?? "");
-    setPaymentHandle(user.paymentHandle ?? "");
-    setPaymentModalVisible(true);
-  };
-
   const STATS = [
     { label: "CAREER AVG", value: user.careerAvg },
     { label: "HIGH GAME", value: user.highGame },
     { label: "TOTAL GAMES", value: user.totalGames },
-    { label: "RATING", value: user.rating },
+    { label: "BSR", value: user.bsr },
   ];
 
   const PRO_FEATURES = [
-    { icon: "zap" as const, text: "Unlimited money challenges" },
+    { icon: "zap" as const, text: "Unlimited skill challenges" },
     { icon: "shield" as const, text: "AI score verification" },
-    { icon: "bar-chart-2" as const, text: "Advanced analytics" },
+    { icon: "bar-chart-2" as const, text: "Advanced BSR analytics" },
     { icon: "users" as const, text: "Private league creation" },
     { icon: "star" as const, text: "Pro badge on your profile" },
     { icon: "trending-up" as const, text: "Priority skill matching" },
@@ -187,9 +167,9 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={[styles.earningsRow, { borderTopColor: colors.border }]}>
-            <Text style={[styles.earningsLabel, { color: colors.mutedForeground }]}>NET EARNINGS</Text>
-            <Text style={[styles.earningsValue, { color: earnings >= 0 ? "#22c55e" : "#ef4444" }]}>
-              {earnings >= 0 ? "+" : ""}${Math.abs(earnings).toFixed(2)}
+            <Text style={[styles.earningsLabel, { color: colors.mutedForeground }]}>BSR RATING</Text>
+            <Text style={[styles.earningsValue, { color: colors.primary }]}>
+              {user.bsr}
             </Text>
           </View>
         </View>
@@ -220,26 +200,6 @@ export default function ProfileScreen() {
             </View>
           ))}
         </View>
-
-        {/* Payment Method */}
-        <TouchableOpacity
-          style={[styles.paymentCard, { backgroundColor: colors.card }]}
-          onPress={openPaymentModal}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.paymentIconBox, { backgroundColor: colors.primary + "22" }]}>
-            <Feather name="dollar-sign" size={16} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.paymentLabel, { color: colors.mutedForeground }]}>PAYMENT METHOD</Text>
-            <Text style={[styles.paymentValue, { color: user.paymentProvider ? colors.foreground : colors.mutedForeground }]}>
-              {user.paymentProvider
-                ? `${user.paymentProvider}  ·  @${user.paymentHandle}`
-                : "Tap to connect your payment"}
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
 
         {/* Friends & Social */}
         <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
@@ -349,67 +309,6 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* Payment Method Modal */}
-      <Modal visible={paymentModalVisible} transparent animationType="slide">
-        <Pressable style={styles.overlay} onPress={() => setPaymentModalVisible(false)}>
-          <Pressable style={[styles.paymentSheet, { backgroundColor: colors.card }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Payment Method</Text>
-            <Text style={[styles.sheetNote, { color: colors.mutedForeground }]}>
-              Let other bowlers know how to pay you after winning a challenge.
-            </Text>
-
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>SELECT PROVIDER</Text>
-            <View style={styles.providerGrid}>
-              {PAYMENT_PROVIDERS.map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  style={[
-                    styles.providerPill,
-                    {
-                      backgroundColor: selectedProvider === p ? colors.primary : colors.secondary,
-                      borderColor: selectedProvider === p ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setSelectedProvider(p)}
-                >
-                  <Text style={[styles.providerPillText, { color: selectedProvider === p ? colors.primaryForeground : colors.foreground }]}>
-                    {p}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {selectedProvider !== "" && (
-              <>
-                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>YOUR HANDLE</Text>
-                <TextInput
-                  style={[styles.handleInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.secondary }]}
-                  placeholder={selectedProvider === "Zelle" ? "Phone or email" : "@username"}
-                  placeholderTextColor={colors.mutedForeground}
-                  value={paymentHandle}
-                  onChangeText={setPaymentHandle}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </>
-            )}
-
-            <TouchableOpacity
-              style={[styles.saveBtn, {
-                backgroundColor: selectedProvider && paymentHandle.trim() ? colors.primary : colors.muted,
-              }]}
-              onPress={handleSavePayment}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>Save Payment Info</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setPaymentModalVisible(false)} style={styles.cancelBtn}>
-              <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }

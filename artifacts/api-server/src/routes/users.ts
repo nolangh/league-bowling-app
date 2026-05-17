@@ -6,58 +6,42 @@ const router: IRouter = Router();
 
 router.get("/users/me", async (req, res): Promise<void> => {
   const { data, error } = await supabaseAdmin
-    .from("users")
-    .select("*")
-    .eq("id", req.userId)
-    .single();
+    .from("users").select("*").eq("id", req.userId).single();
 
-  if (error || !data) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-
+  if (error || !data) { res.status(404).json({ error: "User not found" }); return; }
   res.json(GetMeResponse.parse(mapUser(data)));
 });
 
 router.get("/users/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, username, name, rank, level, career_avg, high_game, total_games, team, rating, is_pro")
+    .select("id, username, name, rank, level, career_avg, high_game, total_games, team, bsr, is_pro")
     .eq("id", id)
     .single();
 
-  if (error || !data) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
+  if (error || !data) { res.status(404).json({ error: "User not found" }); return; }
 
   res.json({
-    id: data.id,
-    username: data.username,
-    name: data.name,
-    rank: data.rank,
-    level: data.level,
-    careerAvg: data.career_avg,
-    highGame: data.high_game,
+    id:         data.id,
+    username:   data.username,
+    name:       data.name,
+    rank:       data.rank,
+    level:      data.level,
+    careerAvg:  data.career_avg,
+    highGame:   data.high_game,
     totalGames: data.total_games,
-    team: data.team,
-    rating: data.rating,
-    isPro: data.is_pro,
+    team:       data.team,
+    bsr:        data.bsr ?? 1200,
+    isPro:      data.is_pro,
   });
 });
 
 router.patch("/users/me", async (req, res): Promise<void> => {
   const parsed = UpdateMeBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { data, error } = await supabaseAdmin
     .from("users")
@@ -66,50 +50,41 @@ router.patch("/users/me", async (req, res): Promise<void> => {
     .select()
     .single();
 
-  if (error || !data) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-
+  if (error || !data) { res.status(404).json({ error: "User not found" }); return; }
   res.json(GetMeResponse.parse(mapUser(data)));
 });
 
 function mapUser(row: Record<string, unknown>) {
   return {
-    id: row.id,
-    authId: row.auth_id,
-    username: row.username,
-    name: row.name,
-    rank: row.rank,
-    level: row.level,
-    xp: row.xp,
-    xpToNext: row.xp_to_next,
-    isPro: row.is_pro,
-    careerAvg: row.career_avg,
-    highGame: row.high_game,
+    id:         row.id,
+    authId:     row.auth_id,
+    username:   row.username,
+    name:       row.name,
+    rank:       row.rank,
+    level:      row.level,
+    xp:         row.xp,
+    xpToNext:   row.xp_to_next,
+    isPro:      row.is_pro,
+    careerAvg:  row.career_avg,
+    highGame:   row.high_game,
     totalGames: row.total_games,
-    team: row.team,
-    rating: row.rating,
-    wins: row.wins ?? 0,
-    losses: row.losses ?? 0,
-    earnings: parseFloat(String(row.earnings ?? 0)),
-    paymentProvider: row.payment_provider ?? null,
-    paymentHandle: row.payment_handle ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    team:       row.team,
+    bsr:        (row.bsr as number) ?? 1200,
+    wins:       (row.wins as number) ?? 0,
+    losses:     (row.losses as number) ?? 0,
+    createdAt:  row.created_at,
+    updatedAt:  row.updated_at,
   };
 }
 
 function toSnake(obj: Record<string, unknown>): Record<string, unknown> {
   const map: Record<string, string> = {
-    authId: "auth_id",
-    xpToNext: "xp_to_next",
-    isPro: "is_pro",
-    careerAvg: "career_avg",
-    highGame: "high_game",
+    authId:     "auth_id",
+    xpToNext:   "xp_to_next",
+    isPro:      "is_pro",
+    careerAvg:  "career_avg",
+    highGame:   "high_game",
     totalGames: "total_games",
-    paymentProvider: "payment_provider",
-    paymentHandle: "payment_handle",
   };
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {

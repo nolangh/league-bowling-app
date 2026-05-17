@@ -67,7 +67,7 @@ function FriendCard({ friend, onRemove }: { friend: Friend; onRemove: () => void
         </View>
         <RankBadge rank={friend.rank} small />
         <Text style={[styles.cardStats, { color: colors.mutedForeground }]}>
-          {friend.rating} rating · avg {friend.careerAvg}
+          {friend.bsr} BSR · avg {friend.careerAvg}
         </Text>
       </View>
       <TouchableOpacity

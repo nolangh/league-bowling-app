@@ -83,7 +83,7 @@ type ChainResult<T = unknown> = { data: T; error: null } | { data: null; error: 
 
 export function createChain<T = unknown>(
   listResult: ChainResult<T[]> = { data: [] as T[], error: null },
-  singleResult: ChainResult<T> = { data: null, error: null }
+  singleResult: ChainResult<T> = { data: null as unknown as T, error: null }
 ) {
   let _singleResult = singleResult;
   let _listResult = listResult;

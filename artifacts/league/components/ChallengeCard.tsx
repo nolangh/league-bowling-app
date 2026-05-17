@@ -19,6 +19,8 @@ interface Props {
 export function ChallengeCard({ challenge, onAccept, isOwn = false, onDelete, onMarkResult, result }: Props) {
   const colors = useColors();
 
+  const bsrChange = challenge.bsrChange;
+
   return (
     <View style={[styles.card, { backgroundColor: colors.card }]}>
       {/* Result Banner */}
@@ -38,7 +40,10 @@ export function ChallengeCard({ challenge, onAccept, isOwn = false, onDelete, on
             color={result === "won" ? "#22c55e" : "#ef4444"}
           />
           <Text style={[styles.resultText, { color: result === "won" ? "#22c55e" : "#ef4444" }]}>
-            {result === "won" ? `WON +$${challenge.stake}` : `LOST -$${challenge.stake}`}
+            {result === "won" ? "WON" : "LOST"}
+            {bsrChange !== undefined && (
+              `  ${bsrChange >= 0 ? "+" : ""}${bsrChange} BSR`
+            )}
           </Text>
           {challenge.acceptorUsername && (
             <Text style={[styles.resultOpponent, { color: colors.mutedForeground }]}>
@@ -79,27 +84,12 @@ export function ChallengeCard({ challenge, onAccept, isOwn = false, onDelete, on
         )}
       </View>
 
-      {/* Progress bar (own challenge with description) */}
-      {isOwn && challenge.description && (
-        <View style={[styles.progressSection, { backgroundColor: colors.secondary }]}>
-          <View style={styles.progressHeader}>
-            <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
-              {challenge.description}
-            </Text>
-            <Text style={[styles.progressPct, { color: colors.foreground }]}>
-              {Math.round((challenge.progress ?? 0) * 100)}%
-            </Text>
-          </View>
-          <View style={[styles.progressBar, { backgroundColor: colors.muted }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${(challenge.progress ?? 0) * 100}%` as any, backgroundColor: colors.primary },
-              ]}
-            />
-          </View>
-        </View>
-      )}
+      {/* Notes */}
+      {challenge.notes ? (
+        <Text style={[styles.notes, { color: colors.mutedForeground }]} numberOfLines={2}>
+          {challenge.notes}
+        </Text>
+      ) : null}
 
       {/* Bottom Row */}
       <View style={styles.bottomRow}>
@@ -107,9 +97,11 @@ export function ChallengeCard({ challenge, onAccept, isOwn = false, onDelete, on
           <Text style={[styles.scoreLabel, { color: colors.mutedForeground }]}>SCORE POSTED</Text>
           <Text style={[styles.score, { color: colors.foreground }]}>{challenge.postedScore}</Text>
         </View>
-        <View style={styles.stakeSection}>
-          <Text style={[styles.stakeLabel, { color: colors.mutedForeground }]}>STAKE</Text>
-          <Text style={[styles.stake, { color: colors.primary }]}>${challenge.stake}</Text>
+
+        {/* BSR badge */}
+        <View style={[styles.bsrSection, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44" }]}>
+          <Text style={[styles.bsrLabel, { color: colors.mutedForeground }]}>BSR</Text>
+          <Text style={[styles.bsrValue, { color: colors.primary }]}>{challenge.posterBsr ?? "—"}</Text>
         </View>
 
         {/* Action button */}
@@ -123,7 +115,7 @@ export function ChallengeCard({ challenge, onAccept, isOwn = false, onDelete, on
             activeOpacity={0.85}
           >
             <Feather name="flag" size={13} color={colors.foreground} />
-            <Text style={[styles.markResultBtnText, { color: colors.foreground }]}>Mark Result</Text>
+            <Text style={[styles.markResultBtnText, { color: colors.foreground }]}>Submit Score</Text>
           </TouchableOpacity>
         ) : !isOwn && !result ? (
           <TouchableOpacity
@@ -190,46 +182,37 @@ const styles = StyleSheet.create({
   proBadgeText: { fontSize: 9, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.5 },
   timeAgo: { fontSize: 12, fontFamily: "DMSans_400Regular" },
   deleteBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: "#ef444420",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "center", alignItems: "center",
   },
-  progressSection: { borderRadius: 12, padding: 12, gap: 8 },
-  progressHeader: { flexDirection: "row", justifyContent: "space-between" },
-  progressLabel: { fontSize: 11, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.5 },
-  progressPct: { fontSize: 11, fontFamily: "BarlowCondensed_600SemiBold" },
-  progressBar: { height: 6, borderRadius: 3, overflow: "hidden" },
-  progressFill: { height: "100%", borderRadius: 3 },
+  notes: { fontSize: 13, fontFamily: "DMSans_400Regular", lineHeight: 18, marginTop: -4 },
   bottomRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   scoreSection: { flex: 1, gap: 2 },
   scoreLabel: { fontSize: 9, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.8 },
   score: { fontSize: 34, fontFamily: "BarlowCondensed_800ExtraBold" },
-  stakeSection: { alignItems: "center", gap: 2 },
-  stakeLabel: { fontSize: 9, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.8 },
-  stake: { fontSize: 24, fontFamily: "BarlowCondensed_800ExtraBold" },
+  bsrSection: {
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  bsrLabel: { fontSize: 9, fontFamily: "BarlowCondensed_600SemiBold", letterSpacing: 0.8 },
+  bsrValue: { fontSize: 20, fontFamily: "BarlowCondensed_800ExtraBold" },
   acceptBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 50 },
   acceptBtnText: { fontSize: 15, fontFamily: "BarlowCondensed_700Bold" },
   markResultBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 50,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 50, borderWidth: 1,
   },
   markResultBtnText: { fontSize: 13, fontFamily: "BarlowCondensed_600SemiBold" },
   statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 50,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 50, borderWidth: 1,
   },
   statusBadgeText: { fontSize: 11, fontFamily: "BarlowCondensed_700Bold", letterSpacing: 0.5 },
 });
