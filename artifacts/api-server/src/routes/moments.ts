@@ -50,6 +50,8 @@ async function formatMoment(row: Record<string, unknown>, userId: number) {
     tags: (row.tags as string[]) ?? [],
     initials: row.initials,
     avatarColor: row.avatar_color,
+    mediaUrl: row.media_url ?? null,
+    mediaType: row.media_type ?? null,
     createdAt: row.created_at,
     liked: !!likeRes.data,
     disliked: !!dislikeRes.data,
@@ -114,7 +116,7 @@ router.get("/moments", async (req, res): Promise<void> => {
     (data ?? []).map((m: Record<string, unknown>) => formatMoment(m, req.userId))
   );
 
-  res.json(ListMomentsResponse.parse(formatted));
+  res.json(formatted);
 });
 
 router.get("/moments/:id", async (req, res): Promise<void> => {
@@ -182,6 +184,14 @@ router.post("/moments", async (req, res): Promise<void> => {
       tags,
       initials: user.username.substring(0, 2),
       avatar_color: "#1a3c2a",
+      media_url:
+        typeof (req.body as Record<string, unknown>)?.mediaUrl === "string"
+          ? ((req.body as Record<string, unknown>).mediaUrl as string)
+          : null,
+      media_type:
+        typeof (req.body as Record<string, unknown>)?.mediaType === "string"
+          ? ((req.body as Record<string, unknown>).mediaType as string)
+          : null,
     })
     .select()
     .single();
@@ -192,7 +202,7 @@ router.post("/moments", async (req, res): Promise<void> => {
   }
 
   res.status(201).json(
-    ListMomentsResponseItem.parse(await formatMoment(moment as Record<string, unknown>, req.userId))
+    await formatMoment(moment as Record<string, unknown>, req.userId)
   );
 });
 
@@ -260,11 +270,11 @@ router.post("/moments/:id/like", async (req, res): Promise<void> => {
       }
     }
 
-    res.json(LikeMomentResponse.parse(await formatMoment(updated as Record<string, unknown>, req.userId)));
+    res.json(await formatMoment(updated as Record<string, unknown>, req.userId));
     return;
   }
 
-  res.json(LikeMomentResponse.parse(await formatMoment(moment as Record<string, unknown>, req.userId)));
+  res.json(await formatMoment(moment as Record<string, unknown>, req.userId));
 });
 
 router.delete("/moments/:id/like", async (req, res): Promise<void> => {
@@ -301,11 +311,11 @@ router.delete("/moments/:id/like", async (req, res): Promise<void> => {
       .select()
       .single();
 
-    res.json(UnlikeMomentResponse.parse(await formatMoment(updated as Record<string, unknown>, req.userId)));
+    res.json(await formatMoment(updated as Record<string, unknown>, req.userId));
     return;
   }
 
-  res.json(UnlikeMomentResponse.parse(await formatMoment(moment as Record<string, unknown>, req.userId)));
+  res.json(await formatMoment(moment as Record<string, unknown>, req.userId));
 });
 
 router.post("/moments/:id/share", async (req, res): Promise<void> => {

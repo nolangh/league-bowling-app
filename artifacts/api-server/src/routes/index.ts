@@ -13,6 +13,7 @@ import dislikesRouter from "./dislikes";
 import inboxRouter from "./inbox";
 import reactionsRouter from "./reactions";
 import reportsRouter from "./reports";
+import ballsRouter from "./balls";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(dislikesRouter);
 router.use(inboxRouter);
 router.use(reactionsRouter);
 router.use(reportsRouter);
+router.use(ballsRouter);
 
 export default router;

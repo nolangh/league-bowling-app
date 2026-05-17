@@ -72,6 +72,42 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="arsenal/index"
+        options={{
+          headerShown: true,
+          title: "My Arsenal",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="arsenal/new"
+        options={{
+          headerShown: true,
+          title: "New Ball",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="arsenal/[id]"
+        options={{
+          headerShown: true,
+          title: "Ball",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
         name="user/[id]"
         options={{
           headerShown: true,

@@ -318,6 +318,7 @@ export default function ProfileScreen() {
         {/* Friends & Social */}
         <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
           {[
+            { icon: "circle" as const, label: "Ball Arsenal", href: "/arsenal" as const },
             { icon: "users" as const, label: "Friends", href: "/friends" as const },
             { icon: "shield" as const, label: "Security & Account", href: "/account-security" as const },
           ].map((item, i, arr) => (

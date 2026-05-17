@@ -61,6 +61,7 @@
     "@supabase/supabase-js": "^2.105.1",
     "expo-local-authentication": "^17.0.8",
     "expo-secure-store": "^15.0.8",
+    "expo-video": "^55.0.17",
     "react-native-purchases": "9.7.2"
   }
 }

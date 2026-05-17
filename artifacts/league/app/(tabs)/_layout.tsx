@@ -3,6 +3,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { ActivityIndicator, Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppProvider } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
@@ -48,9 +49,15 @@ const TAB_TITLES: Record<string, string> = {
 export default function TabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+
+  // Trim excess bottom safe-area padding so icons aren't floating up high.
+  // Keep just enough breathing room above the home indicator.
+  const bottomInset = isIOS ? Math.max(insets.bottom - 10, 6) : 6;
+  const barHeight = isWeb ? 84 : 52 + bottomInset;
 
   return (
     <AuthGuard>
@@ -66,8 +73,11 @@ export default function TabLayout() {
               borderTopWidth: isWeb ? 1 : 0,
               borderTopColor: colors.border,
               elevation: 0,
-              ...(isWeb ? { height: 84 } : {}),
+              height: barHeight,
+              paddingTop: 6,
+              paddingBottom: isWeb ? 12 : bottomInset,
             },
+            tabBarItemStyle: { paddingVertical: 0 },
             tabBarBackground: () =>
               isIOS ? (
                 <BlurView

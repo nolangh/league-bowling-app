@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image as ExpoImage } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 import { useColors } from "@/hooks/useColors";
 import { RankBadge } from "@/components/RankBadge";
@@ -25,8 +27,26 @@ type ApiMoment = {
   content: string; score?: number | null; type: string;
   likes: number; comments: number; dislikes?: number; saves?: number; tags?: string[];
   timeAgo: string; liked: boolean; disliked?: boolean; saved?: boolean;
-  initials: string; avatarColor: string; createdAt?: string;
+  initials: string; avatarColor: string;
+  mediaUrl?: string | null; mediaType?: string | null;
+  createdAt?: string;
 };
+
+function MomentVideo({ url }: { url: string }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+  return (
+    <VideoView
+      player={player}
+      style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 16, marginTop: 4, backgroundColor: "#000" }}
+      contentFit="cover"
+      nativeControls
+    />
+  );
+}
 
 type ApiComment = {
   id: number; momentId: number; userId: number; username: string;
@@ -79,6 +99,8 @@ export default function MomentDetailScreen() {
         saved: data.saved ?? false,
         initials: data.initials,
         avatarColor: data.avatarColor,
+        mediaUrl: data.mediaUrl ?? null,
+        mediaType: data.mediaType ?? null,
         createdAt: data.createdAt,
       });
     } catch { /* keep local state */ }
@@ -195,6 +217,19 @@ export default function MomentDetailScreen() {
           )}
 
           <Text style={[styles.postContent, { color: colors.foreground }]}>{moment.content}</Text>
+
+          {moment.mediaUrl ? (
+            moment.mediaType === "video" ? (
+              <MomentVideo url={moment.mediaUrl} />
+            ) : (
+              <ExpoImage
+                source={{ uri: moment.mediaUrl }}
+                style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 16, marginTop: 4, backgroundColor: "#000" }}
+                contentFit="cover"
+                transition={200}
+              />
+            )
+          ) : null}
 
           {moment.tags && moment.tags.length > 0 && (
             <View style={styles.tagsRow}>

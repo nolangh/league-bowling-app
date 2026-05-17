@@ -15,12 +15,16 @@ import {
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { Image as ExpoImage } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
 import { useApp, type Moment, type Friend } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { api } from "@/lib/api";
+import { uploadMedia, type MediaKind } from "@/lib/media";
 
 type FilterKey = "all" | "saved" | "game" | "challenge" | "advice";
 
@@ -94,6 +98,8 @@ function MomentCard({
 
       <Text style={[styles.content, { color: colors.foreground }]}>{moment.content}</Text>
 
+      {moment.mediaUrl ? <MomentMedia url={moment.mediaUrl} kind={moment.mediaType === "video" ? "video" : "image"} /> : null}
+
       {moment.tags && moment.tags.length > 0 && (
         <View style={styles.tagsRow}>
           {moment.tags.map((tag) => (
@@ -157,16 +163,49 @@ function MomentCard({
   );
 }
 
+function MomentMedia({ url, kind }: { url: string; kind: MediaKind }) {
+  if (kind === "video") {
+    return <MomentVideo url={url} />;
+  }
+  return (
+    <ExpoImage
+      source={{ uri: url }}
+      style={mediaStyles.media}
+      contentFit="cover"
+      transition={200}
+    />
+  );
+}
+
+function MomentVideo({ url }: { url: string }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+  return (
+    <VideoView
+      player={player}
+      style={mediaStyles.media}
+      contentFit="cover"
+      nativeControls={false}
+    />
+  );
+}
+
 function PostComposer({ visible, onClose, onPost }: {
   visible: boolean;
   onClose: () => void;
-  onPost: (content: string, type: Moment["type"], score?: number, tags?: string[]) => void;
+  onPost: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null) => void;
 }) {
   const colors = useColors();
   const [content, setContent] = useState("");
   const [type, setType] = useState<Moment["type"]>("advice");
   const [score, setScore] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
+  const [uploading, setUploading] = useState(false);
   const insets = useSafeAreaInsets();
 
   const types: { key: Moment["type"]; label: string; icon: string }[] = [
@@ -176,16 +215,48 @@ function PostComposer({ visible, onClose, onPost }: {
     { key: "challenge", label: "Challenge", icon: "dollar-sign" },
   ];
 
+  const pickMedia = async (kind: MediaKind) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: kind === "video"
+        ? ImagePicker.MediaTypeOptions.Videos
+        : ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      videoMaxDuration: 60,
+    });
+    if (res.canceled || !res.assets[0]) return;
+    setMediaUri(res.assets[0].uri);
+    setMediaKind(kind);
+  };
+
   const handlePost = async () => {
     if (!content.trim() || submitting) return;
     setSubmitting(true);
+
+    let uploadedUrl: string | null = null;
+    let uploadedKind: MediaKind | null = null;
+    if (mediaUri && mediaKind) {
+      setUploading(true);
+      try {
+        uploadedUrl = await uploadMedia(mediaUri, mediaKind, "moments");
+        uploadedKind = mediaKind;
+      } catch {
+        // proceed without media on failure
+      } finally {
+        setUploading(false);
+      }
+    }
+
     const tagMatches = content.match(/#(\w+)/g) ?? [];
     const tags = tagMatches.map((t) => t.slice(1).toLowerCase());
     const parsedScore = score && !isNaN(parseInt(score)) ? parseInt(score) : undefined;
-    onPost(content.trim(), type, parsedScore, tags);
+    onPost(content.trim(), type, parsedScore, tags, uploadedUrl, uploadedKind);
     setContent("");
     setScore("");
     setType("advice");
+    setMediaUri(null);
+    setMediaKind(null);
     setSubmitting(false);
     onClose();
   };
@@ -237,6 +308,39 @@ function PostComposer({ visible, onClose, onPost }: {
               />
             )}
 
+            {mediaUri ? (
+              <View style={mediaStyles.previewWrap}>
+                {mediaKind === "video" ? (
+                  <MomentVideo url={mediaUri} />
+                ) : (
+                  <ExpoImage source={{ uri: mediaUri }} style={mediaStyles.media} contentFit="cover" />
+                )}
+                <TouchableOpacity
+                  style={mediaStyles.removeBtn}
+                  onPress={() => { setMediaUri(null); setMediaKind(null); }}
+                >
+                  <Feather name="x" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+                <TouchableOpacity
+                  style={[mediaStyles.attachBtn, { backgroundColor: colors.secondary }]}
+                  onPress={() => pickMedia("image")}
+                >
+                  <Feather name="image" size={16} color={colors.foreground} />
+                  <Text style={[mediaStyles.attachText, { color: colors.foreground }]}>Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[mediaStyles.attachBtn, { backgroundColor: colors.secondary }]}
+                  onPress={() => pickMedia("video")}
+                >
+                  <Feather name="video" size={16} color={colors.foreground} />
+                  <Text style={[mediaStyles.attachText, { color: colors.foreground }]}>Video</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <TouchableOpacity
               style={[styles.postBtn, { backgroundColor: content.trim() ? colors.primary : colors.secondary }]}
               onPress={handlePost}
@@ -244,7 +348,7 @@ function PostComposer({ visible, onClose, onPost }: {
               activeOpacity={0.85}
             >
               <Text style={[styles.postBtnText, { color: content.trim() ? colors.primaryForeground : colors.mutedForeground }]}>
-                {submitting ? "Posting..." : "Post"}
+                {submitting ? (uploading ? "Uploading..." : "Posting...") : "Post"}
               </Text>
             </TouchableOpacity>
           </Pressable>
@@ -721,4 +825,20 @@ const styles = StyleSheet.create({
   newListRow: { flexDirection: "row", gap: 10, marginTop: 14 },
   newListInput: { flex: 1, borderRadius: 12, padding: 12, fontSize: 14 },
   newListBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+});
+
+const mediaStyles = StyleSheet.create({
+  media: { width: "100%", aspectRatio: 4 / 3, borderRadius: 16, marginTop: 10, backgroundColor: "#000" },
+  previewWrap: { position: "relative", marginTop: 8 },
+  removeBtn: {
+    position: "absolute", top: 18, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center", justifyContent: "center",
+  },
+  attachBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 50,
+  },
+  attachText: { fontSize: 13, fontWeight: "600" },
 });

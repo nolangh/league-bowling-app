@@ -44,8 +44,27 @@ export interface Game {
   alley: string;
   oilPattern: string;
   ballUsed: string;
+  ballId?: number | null;
   notes: string;
   verified: boolean;
+}
+
+export interface Ball {
+  id: string;
+  name: string;
+  brand?: string | null;
+  weight?: number | null;
+  color?: string | null;
+  coverstock?: string | null;
+  core?: string | null;
+  drillingLayout?: string | null;
+  span?: string | null;
+  pitch?: string | null;
+  surface?: string | null;
+  notes?: string | null;
+  imageUrl?: string | null;
+  isActive: boolean;
+  createdAt?: string;
 }
 
 export interface Challenge {
@@ -95,6 +114,8 @@ export interface Moment {
   userReaction?: string | null;
   initials: string;
   avatarColor: string;
+  mediaUrl?: string | null;
+  mediaType?: string | null;
   createdAt?: string;
 }
 
@@ -209,7 +230,12 @@ interface AppContextValue {
   toggleDislikeMoment: (momentId: string) => void;
   saveMoment: (momentId: string, listId?: number) => Promise<void>;
   unsaveMoment: (momentId: string) => Promise<void>;
-  postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[]) => Promise<void>;
+  postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null) => Promise<void>;
+  balls: Ball[];
+  createBall: (input: Partial<Ball> & { name: string }) => Promise<Ball>;
+  updateBall: (id: string, patch: Partial<Ball>) => Promise<void>;
+  deleteBall: (id: string) => Promise<void>;
+  refreshBalls: () => Promise<void>;
   acceptChallenge: (challengeId: string) => void;
   postChallenge: (score: number, notes?: string) => void;
   deleteChallenge: (challengeId: string) => Promise<void>;
@@ -254,7 +280,16 @@ type ApiMoment = {
   likes: number; comments: number; dislikes?: number; saves?: number; tags?: string[];
   timeAgo: string; liked: boolean; disliked?: boolean; saved?: boolean;
   userReaction?: string | null;
-  initials: string; avatarColor: string; createdAt?: string;
+  initials: string; avatarColor: string;
+  mediaUrl?: string | null; mediaType?: string | null;
+  createdAt?: string;
+};
+type ApiBall = {
+  id: string; name: string; brand?: string | null; weight?: number | null;
+  color?: string | null; coverstock?: string | null; core?: string | null;
+  drillingLayout?: string | null; span?: string | null; pitch?: string | null;
+  surface?: string | null; notes?: string | null; imageUrl?: string | null;
+  isActive: boolean; createdAt?: string;
 };
 type ApiNotification = {
   id: number; type: string;
@@ -322,7 +357,12 @@ function toMoment(m: ApiMoment): Moment {
     disliked: m.disliked ?? false,
     saved: m.saved ?? false,
     userReaction: m.userReaction ?? null,
+    mediaUrl: m.mediaUrl ?? null,
+    mediaType: m.mediaType ?? null,
   };
+}
+function toBall(b: ApiBall): Ball {
+  return { ...b, id: String(b.id) };
 }
 function toNotification(n: ApiNotification): Notification {
   return {
@@ -371,6 +411,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [completedChallenges, setCompletedChallenges] = useState<Challenge[]>([]);
   const [moments, setMoments] = useState<Moment[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
+  const [balls, setBalls] = useState<Ball[]>([]);
   const [inbox, setInbox] = useState<Notification[]>([]);
   const [inboxCount, setInboxCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -387,6 +428,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshAll().finally(() => setLoading(false));
     fetchInbox();
+    refreshBalls();
     setupRealtime();
     return () => {
       if (realtimeRef.current) supabase.removeChannel(realtimeRef.current);
@@ -415,6 +457,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           liked: false, disliked: false, saved: false,
           initials: raw.initials ?? raw.username.slice(0, 2),
           avatarColor: raw.avatar_color ?? raw.avatarColor ?? "#1a3c2a",
+          mediaUrl: (raw as { media_url?: string | null; mediaUrl?: string | null }).media_url
+            ?? (raw as { mediaUrl?: string | null }).mediaUrl ?? null,
+          mediaType: (raw as { media_type?: string | null; mediaType?: string | null }).media_type
+            ?? (raw as { mediaType?: string | null }).mediaType ?? null,
           createdAt: raw.created_at,
         };
         setMoments((prev) => [newMoment, ...prev]);
@@ -515,9 +561,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* keep optimistic */ }
   };
 
-  const postMoment = async (content: string, type: Moment["type"], score?: number, tags?: string[]) => {
+  const postMoment = async (
+    content: string,
+    type: Moment["type"],
+    score?: number,
+    tags?: string[],
+    mediaUrl?: string | null,
+    mediaType?: string | null,
+  ) => {
     try {
-      const created = await api.post<ApiMoment>("/moments", { content, type, score, tags });
+      const created = await api.post<ApiMoment>("/moments", { content, type, score, tags, mediaUrl, mediaType });
       setMoments((prev) => [toMoment(created), ...prev]);
     } catch {
       const newMoment: Moment = {
@@ -532,9 +585,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         liked: false, disliked: false, saved: false,
         initials: user.username.substring(0, 2),
         avatarColor: "#1a3c2a",
+        mediaUrl: mediaUrl ?? null,
+        mediaType: mediaType ?? null,
       };
       setMoments((prev) => [newMoment, ...prev]);
     }
+  };
+
+  const refreshBalls = async () => {
+    try {
+      const res = await api.get<ApiBall[]>("/balls");
+      setBalls(res.map(toBall));
+    } catch { /* ignore */ }
+  };
+
+  const createBall = async (input: Partial<Ball> & { name: string }): Promise<Ball> => {
+    const created = await api.post<ApiBall>("/balls", input);
+    const ball = toBall(created);
+    setBalls((prev) => [ball, ...prev]);
+    return ball;
+  };
+
+  const updateBall = async (id: string, patch: Partial<Ball>) => {
+    setBalls((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+    try {
+      const updated = await api.patch<ApiBall>(`/balls/${id}`, patch);
+      setBalls((prev) => prev.map((b) => (b.id === id ? toBall(updated) : b)));
+    } catch { /* keep optimistic */ }
+  };
+
+  const deleteBall = async (id: string) => {
+    setBalls((prev) => prev.filter((b) => b.id !== id));
+    try { await api.delete(`/balls/${id}`); } catch { /* ignore */ }
   };
 
   const acceptChallenge = async (challengeId: string) => {
@@ -663,6 +745,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       user, games, challenges, myActiveChallenges, acceptedChallenges, completedChallenges,
       moments, leagues, loading,
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
+      balls, createBall, updateBall, deleteBall, refreshBalls,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
       setUserPro, updateSpecs, joinLeague, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,

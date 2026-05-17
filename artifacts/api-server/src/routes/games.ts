@@ -35,6 +35,30 @@ router.post("/games", async (req, res): Promise<void> => {
     return;
   }
 
+  const rawBody = req.body as Record<string, unknown>;
+  const ballIdRaw = rawBody?.ballId;
+  let ballId: number | null =
+    typeof ballIdRaw === "number"
+      ? ballIdRaw
+      : typeof ballIdRaw === "string" && ballIdRaw && !isNaN(parseInt(ballIdRaw, 10))
+        ? parseInt(ballIdRaw, 10)
+        : null;
+
+  // Verify the ball belongs to this user before linking. Service role bypasses
+  // RLS, so we must enforce ownership in the route.
+  if (ballId !== null) {
+    const { data: ownedBall } = await supabaseAdmin
+      .from("bowling_balls")
+      .select("id")
+      .eq("id", ballId)
+      .eq("user_id", req.userId)
+      .maybeSingle();
+    if (!ownedBall) {
+      res.status(403).json({ error: "Ball not found or not owned by user" });
+      return;
+    }
+  }
+
   const { data: game, error: insertErr } = await supabaseAdmin
     .from("games")
     .insert({
@@ -44,6 +68,7 @@ router.post("/games", async (req, res): Promise<void> => {
       alley: parsed.data.alley ?? "",
       oil_pattern: parsed.data.oilPattern ?? "House Shot",
       ball_used: parsed.data.ballUsed ?? "",
+      ball_id: ballId,
       notes: parsed.data.notes ?? "",
       verified: parsed.data.verified ?? false,
     })
@@ -98,6 +123,7 @@ function mapGame(row: Record<string, unknown>) {
     alley: row.alley,
     oilPattern: row.oil_pattern,
     ballUsed: row.ball_used,
+    ballId: row.ball_id ?? null,
     notes: row.notes,
     verified: row.verified,
     createdAt: row.created_at,

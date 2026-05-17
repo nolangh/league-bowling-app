@@ -15,18 +15,12 @@ import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context"
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
+import { useRouter } from "expo-router";
+
 import { useColors } from "@/hooks/useColors";
-import { useApp, type Game } from "@/context/AppContext";
+import { useApp, type Game, type Ball } from "@/context/AppContext";
 
 const OIL_PATTERNS = ["House Shot", "Sport Shot", "Challenge Pattern", "PBA Shot", "Other"];
-const BALL_OPTIONS = [
-  "Storm Phaze II",
-  "Storm Phaze III",
-  "Motiv Trident",
-  "Brunswick Rhino",
-  "Ebonite Cyclone",
-  "Other",
-];
 const ALLEYS = [
   "Bowlero Midtown",
   "AMF Pro Bowl",
@@ -74,13 +68,15 @@ function GameRow({ game }: { game: Game }) {
 export default function LogScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { games, logGame, user } = useApp();
+  const { games, logGame, user, balls } = useApp();
+  const router = useRouter();
+  const activeBalls = balls.filter((b) => b.isActive);
   const [modalVisible, setModalVisible] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
   const [scoreInput, setScoreInput] = useState("");
   const [alley, setAlley] = useState(ALLEYS[0]);
   const [oilPattern, setOilPattern] = useState(OIL_PATTERNS[0]);
-  const [ball, setBall] = useState(BALL_OPTIONS[0]);
+  const [selectedBall, setSelectedBall] = useState<Ball | null>(null);
   const [notes, setNotes] = useState("");
   const [step, setStep] = useState<"score" | "details" | "verifying">("score");
 
@@ -101,10 +97,11 @@ export default function LogScreen() {
       date: new Date().toISOString().split("T")[0],
       alley,
       oilPattern,
-      ballUsed: ball,
+      ballUsed: selectedBall?.name ?? "",
+      ballId: selectedBall ? Number(selectedBall.id) : null,
       notes,
       verified: true,
-    });
+    } as any);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsLogging(false);
     setModalVisible(false);
@@ -115,7 +112,7 @@ export default function LogScreen() {
     setScoreInput("");
     setAlley(ALLEYS[0]);
     setOilPattern(OIL_PATTERNS[0]);
-    setBall(BALL_OPTIONS[0]);
+    setSelectedBall(null);
     setNotes("");
     setStep("score");
   };
@@ -230,14 +227,39 @@ export default function LogScreen() {
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>BALL USED</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionRow}>
-                  {BALL_OPTIONS.map((b) => (
-                    <TouchableOpacity key={b} style={[styles.optionPill, { backgroundColor: ball === b ? colors.foreground : colors.secondary, borderColor: ball === b ? colors.foreground : colors.border }]} onPress={() => setBall(b)}>
-                      <Text style={[styles.optionPillText, { color: ball === b ? colors.background : colors.foreground }]}>{b}</Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 0 }]}>BALL USED</Text>
+                  <TouchableOpacity
+                    onPress={() => { setModalVisible(false); resetForm(); router.push("/arsenal/new"); }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary, letterSpacing: 0.5 }}>+ ADD BALL</Text>
+                  </TouchableOpacity>
+                </View>
+                {activeBalls.length === 0 ? (
+                  <TouchableOpacity
+                    style={[styles.optionPill, { backgroundColor: colors.secondary, borderColor: colors.border, alignSelf: "flex-start", marginTop: 4 }]}
+                    onPress={() => { setModalVisible(false); resetForm(); router.push("/arsenal" as any); }}
+                  >
+                    <Text style={[styles.optionPillText, { color: colors.mutedForeground }]}>No balls in your arsenal — tap to add one</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionRow}>
+                    <TouchableOpacity
+                      style={[styles.optionPill, { backgroundColor: selectedBall === null ? colors.foreground : colors.secondary, borderColor: selectedBall === null ? colors.foreground : colors.border }]}
+                      onPress={() => setSelectedBall(null)}
+                    >
+                      <Text style={[styles.optionPillText, { color: selectedBall === null ? colors.background : colors.foreground }]}>None</Text>
                     </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                    {activeBalls.map((b) => {
+                      const sel = selectedBall?.id === b.id;
+                      return (
+                        <TouchableOpacity key={b.id} style={[styles.optionPill, { backgroundColor: sel ? colors.foreground : colors.secondary, borderColor: sel ? colors.foreground : colors.border }]} onPress={() => setSelectedBall(b)}>
+                          <Text style={[styles.optionPillText, { color: sel ? colors.background : colors.foreground }]}>{b.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
                 <TouchableOpacity
                   style={[styles.nextBtn, { backgroundColor: "#ff5f1f" }]}
                   onPress={handleSubmit}
