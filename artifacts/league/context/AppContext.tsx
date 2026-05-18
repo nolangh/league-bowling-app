@@ -271,6 +271,7 @@ interface AppContextValue {
   updateSpecs: (specs: Partial<Pick<UserProfile, "revRate"|"ballSpeed"|"axisTilt"|"axisRotation"|"papOver"|"papUp"|"releaseStyle"|"gripStyle"|"dominantHand">>) => Promise<void>;
   setHomeAlley: (alley: AlleyPlace | null) => Promise<void>;
   joinLeague: (leagueId: string) => void;
+  searchLeagues: (q: string, type?: "all" | "public" | "private") => Promise<void>;
   refreshAll: () => Promise<void>;
   sendFriendRequest: (userId: number) => Promise<void>;
   acceptFriendRequest: (userId: number) => Promise<void>;
@@ -758,6 +759,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   };
 
+  const searchLeagues = async (q: string, type: "all" | "public" | "private" = "all") => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (type !== "all") params.set("type", type);
+    try {
+      const res = await api.get<ApiLeague[]>(`/leagues${params.toString() ? `?${params}` : ""}`);
+      setLeagues(res.map(toLeague));
+    } catch { /* keep current */ }
+  };
+
   const sendFriendRequest = async (userId: number) => {
     await api.post(`/friends/${userId}/request`);
   };
@@ -802,7 +813,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
       balls, createBall, updateBall, deleteBall, refreshBalls,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
-      setUserPro, updateSpecs, setHomeAlley, joinLeague, refreshAll,
+      setUserPro, updateSpecs, setHomeAlley, joinLeague, searchLeagues, refreshAll,
       sendFriendRequest, acceptFriendRequest, removeFriend,
       inbox, inboxCount, fetchInbox, markInboxRead, reactToMoment, shareMoment,
     }}>

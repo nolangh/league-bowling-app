@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -95,24 +95,28 @@ function LeagueCard({ league, onJoin }: { league: League; onJoin: () => void }) 
 export default function LeaguesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { leagues, joinLeague } = useApp();
+  const { leagues, joinLeague, searchLeagues } = useApp();
   const [filter, setFilter] = useState<"all" | "public" | "private">("all");
   const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
   const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return leagues.filter((l) => {
-      if (filter !== "all" && l.type !== filter) return false;
-      if (!q) return true;
-      return (
-        l.name.toLowerCase().includes(q) ||
-        (l.description?.toLowerCase().includes(q) ?? false) ||
-        l.level.toLowerCase().includes(q)
-      );
-    });
-  }, [leagues, filter, query]);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      await searchLeagues(query, filter);
+      setSearching(false);
+    }, query ? 300 : 0);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, filter]);
+
+  const filtered = leagues;
 
   const handleJoin = (league: League) => {
     joinLeague(league.id);
@@ -147,11 +151,13 @@ export default function LeaguesScreen() {
           autoCorrect={false}
           returnKeyType="search"
         />
-        {query.length > 0 && (
+        {searching && query.length > 0 ? (
+          <Feather name="loader" size={16} color={colors.mutedForeground} />
+        ) : query.length > 0 ? (
           <TouchableOpacity onPress={() => setQuery("")} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
             <Feather name="x-circle" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       <View style={styles.filterRow}>

@@ -9,10 +9,22 @@ import {
 const router: IRouter = Router();
 
 router.get("/leagues", async (req, res): Promise<void> => {
-  const { data: leagues, error } = await supabaseAdmin
-    .from("leagues")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const qRaw = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
+  const type = typeof req.query.type === "string" ? req.query.type : "";
+  const limit = Math.min(parseInt(String(req.query.limit ?? "100"), 10) || 100, 200);
+
+  let query = supabaseAdmin.from("leagues").select("*");
+  if (qRaw) {
+    const safe = qRaw.replace(/[%,()]/g, " ");
+    const pattern = `%${safe}%`;
+    query = query.or(`name.ilike.${pattern},description.ilike.${pattern},level.ilike.${pattern}`);
+  }
+  if (type === "public" || type === "private") {
+    query = query.eq("type", type);
+  }
+  const { data: leagues, error } = await query
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
   if (error) {
     res.status(500).json({ error: error.message });
