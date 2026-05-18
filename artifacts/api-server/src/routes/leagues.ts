@@ -18,8 +18,30 @@ function mapLeague(row: Record<string, unknown>, extra?: Record<string, unknown>
     weeklyChallenge: row.weekly_challenge ?? null,
     createdBy:       row.created_by ?? null,
     createdAt:       row.created_at,
+    format:          row.format ?? "casual",
+    teamSize:        row.team_size ?? null,
+    seasonStart:     row.season_start ?? null,
+    seasonWeeks:     row.season_weeks ?? null,
+    meetDay:         row.meet_day ?? null,
+    meetTime:        row.meet_time ?? null,
+    scoringType:     row.scoring_type ?? null,
+    handicapBase:    row.handicap_base ?? null,
+    handicapPercent: row.handicap_percent ?? null,
+    pointSystem:     row.point_system ?? null,
+    absenteeScore:   row.absentee_score ?? null,
+    fees:            row.fees ?? null,
+    rules:           row.rules ?? null,
     ...extra,
   };
+}
+
+const MEET_DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+const POINT_SYSTEMS = ["standard","petersen","head_to_head","total_pins"];
+
+function clampInt(v: unknown, min: number, max: number): number | null {
+  const n = typeof v === "number" ? v : parseInt(String(v), 10);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
 async function getMembership(leagueId: number, userId: number) {
@@ -72,7 +94,8 @@ router.get("/leagues", async (req, res): Promise<void> => {
 // ─── Create league ────────────────────────────────────────────────────────────
 
 router.post("/leagues", async (req, res): Promise<void> => {
-  const { name, description, type, level, weeklyChallenge } = req.body as Record<string, unknown>;
+  const b = req.body as Record<string, unknown>;
+  const { name, description, type, level, weeklyChallenge, format } = b;
 
   if (!name || typeof name !== "string" || !name.trim()) {
     res.status(400).json({ error: "name is required" }); return;
@@ -80,9 +103,52 @@ router.post("/leagues", async (req, res): Promise<void> => {
   if (!description || typeof description !== "string") {
     res.status(400).json({ error: "description is required" }); return;
   }
-  const leagueType  = type === "private" ? "private" : "public";
-  const leagueLevel = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"].includes(String(level))
+  const leagueType   = type === "private" ? "private" : "public";
+  const leagueLevel  = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"].includes(String(level))
     ? String(level) : "BEGINNER";
+  const leagueFormat = format === "traditional" ? "traditional" : "casual";
+
+  const isTraditional = leagueFormat === "traditional";
+  const meetDay   = typeof b.meetDay === "string" && MEET_DAYS.includes(b.meetDay.toLowerCase())
+    ? b.meetDay.toLowerCase() : null;
+
+  // Real HH:MM 24h validation (00:00 .. 23:59)
+  let meetTime: string | null = null;
+  if (typeof b.meetTime === "string" && /^\d{2}:\d{2}$/.test(b.meetTime)) {
+    const [hh, mm] = b.meetTime.split(":").map(Number);
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) meetTime = b.meetTime;
+  }
+
+  const scoringType = b.scoringType === "handicap" ? "handicap" : (b.scoringType === "scratch" ? "scratch" : null);
+  const pointSystem = typeof b.pointSystem === "string" && POINT_SYSTEMS.includes(b.pointSystem)
+    ? b.pointSystem : null;
+
+  // Real calendar date validation (YYYY-MM-DD where the date actually exists)
+  let seasonStart: string | null = null;
+  if (typeof b.seasonStart === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.seasonStart)) {
+    const d = new Date(b.seasonStart + "T00:00:00Z");
+    if (!isNaN(d.getTime()) && d.toISOString().slice(0, 10) === b.seasonStart) seasonStart = b.seasonStart;
+  }
+
+  const teamSize       = isTraditional ? clampInt(b.teamSize, 2, 5) : null;
+  const seasonWeeks    = isTraditional ? clampInt(b.seasonWeeks, 1, 52) : null;
+  const absenteeScore  = isTraditional ? (b.absenteeScore == null ? 0 : clampInt(b.absenteeScore, 0, 300)) : null;
+  // Apply USBC-style defaults when handicap scoring is selected but values are missing/invalid
+  const handicapBase    = isTraditional && scoringType === "handicap"
+    ? (clampInt(b.handicapBase, 100, 300) ?? 220) : null;
+  const handicapPercent = isTraditional && scoringType === "handicap"
+    ? (clampInt(b.handicapPercent, 1, 100) ?? 80) : null;
+
+  // Strict required fields for traditional format
+  if (isTraditional) {
+    if (teamSize == null)       { res.status(400).json({ error: "teamSize is required for traditional leagues (2–5)." }); return; }
+    if (seasonWeeks == null)    { res.status(400).json({ error: "seasonWeeks is required (1–52)." }); return; }
+    if (!seasonStart)           { res.status(400).json({ error: "seasonStart must be a valid YYYY-MM-DD date." }); return; }
+    if (!meetDay)               { res.status(400).json({ error: "meetDay is required (monday–sunday)." }); return; }
+    if (!meetTime)              { res.status(400).json({ error: "meetTime is required (HH:MM, 24-hour)." }); return; }
+    if (!scoringType)           { res.status(400).json({ error: "scoringType is required ('scratch' or 'handicap')." }); return; }
+    if (!pointSystem)           { res.status(400).json({ error: "pointSystem is required." }); return; }
+  }
 
   const { data: league, error } = await supabaseAdmin
     .from("leagues")
@@ -95,6 +161,19 @@ router.post("/leagues", async (req, res): Promise<void> => {
       avg_score:        150,
       weekly_challenge: typeof weeklyChallenge === "string" ? weeklyChallenge.trim().slice(0, 200) || null : null,
       created_by:       req.userId,
+      format:           leagueFormat,
+      team_size:        teamSize,
+      season_start:     seasonStart,
+      season_weeks:     seasonWeeks,
+      meet_day:         meetDay,
+      meet_time:        meetTime,
+      scoring_type:     scoringType,
+      handicap_base:    handicapBase,
+      handicap_percent: handicapPercent,
+      point_system:     pointSystem,
+      absentee_score:   absenteeScore,
+      fees:             typeof b.fees === "string" ? b.fees.trim().slice(0, 300) || null : null,
+      rules:            typeof b.rules === "string" ? b.rules.trim().slice(0, 2000) || null : null,
     })
     .select()
     .single();

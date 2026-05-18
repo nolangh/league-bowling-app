@@ -18,7 +18,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
-import { useApp, type League } from "@/context/AppContext";
+import { useApp, type League, type CreateLeagueInput } from "@/context/AppContext";
 
 const LEVEL_COLORS: Record<string, string> = {
   BEGINNER: "#a8c870",
@@ -125,36 +125,120 @@ function LeagueCard({
   );
 }
 
-function CreateLeagueModal({
+const POINT_SYSTEM_LABELS: Record<string, string> = {
+  standard: "Standard (2 pts/game, 1 pt/series)",
+  petersen: "Petersen Points",
+  head_to_head: "Head-to-Head (win/loss)",
+  total_pins: "Total Pins",
+};
+
+const MEET_DAYS_LIST = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+
+function CreateLeagueWizard({
   visible,
   onClose,
   onCreate,
 }: {
   visible: boolean;
   onClose: () => void;
-  onCreate: (input: { name: string; description: string; type: "public" | "private"; level: string; weeklyChallenge?: string }) => Promise<void>;
+  onCreate: (input: CreateLeagueInput) => Promise<void>;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+
+  const [step, setStep] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const [format, setFormat] = useState<"casual" | "traditional">("casual");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<"public" | "private">("public");
   const [level, setLevel] = useState("INTERMEDIATE");
-  const [weeklyChallenge, setWeeklyChallenge] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
-  const reset = () => {
-    setName(""); setDescription(""); setType("public");
-    setLevel("INTERMEDIATE"); setWeeklyChallenge(""); setError("");
+  const [teamSize, setTeamSize] = useState(4);
+  const [seasonStart, setSeasonStart] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [seasonWeeks, setSeasonWeeks] = useState(12);
+  const [meetDay, setMeetDay] = useState("wednesday");
+  const [meetTime, setMeetTime] = useState("19:00");
+
+  const [scoringType, setScoringType] = useState<"scratch" | "handicap">("handicap");
+  const [handicapBase, setHandicapBase] = useState(220);
+  const [handicapPercent, setHandicapPercent] = useState(80);
+  const [pointSystem, setPointSystem] = useState("standard");
+  const [absenteeScore, setAbsenteeScore] = useState(140);
+
+  const [weeklyChallenge, setWeeklyChallenge] = useState("");
+  const [fees, setFees] = useState("");
+  const [rules, setRules] = useState("");
+
+  const defaultSeasonStart = () => {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
   };
 
+  const reset = () => {
+    setStep(0); setError(""); setSubmitting(false);
+    setFormat("casual");
+    setName(""); setDescription(""); setType("public"); setLevel("INTERMEDIATE");
+    setTeamSize(4); setSeasonStart(defaultSeasonStart()); setSeasonWeeks(12);
+    setMeetDay("wednesday"); setMeetTime("19:00");
+    setScoringType("handicap"); setHandicapBase(220); setHandicapPercent(80);
+    setPointSystem("standard"); setAbsenteeScore(140);
+    setWeeklyChallenge(""); setFees(""); setRules("");
+  };
+
+  const handleClose = () => { reset(); onClose(); };
+
+  const steps = format === "traditional"
+    ? ["Format", "Basics", "Team & Schedule", "Scoring", "Extras", "Review"]
+    : ["Format", "Basics", "Extras", "Review"];
+
+  const validateBasics = () => {
+    if (!name.trim()) { setError("League name is required."); return false; }
+    if (!description.trim()) { setError("Description is required."); return false; }
+    return true;
+  };
+
+  const validateSchedule = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(seasonStart)) { setError("Season start must be YYYY-MM-DD."); return false; }
+    if (!/^\d{2}:\d{2}$/.test(meetTime)) { setError("Meet time must be HH:MM (24-hour)."); return false; }
+    return true;
+  };
+
+  const goNext = () => {
+    setError("");
+    const stepName = steps[step];
+    if (stepName === "Basics" && !validateBasics()) return;
+    if (stepName === "Team & Schedule" && !validateSchedule()) return;
+    setStep((s) => Math.min(s + 1, steps.length - 1));
+  };
+
+  const goBack = () => { setError(""); setStep((s) => Math.max(0, s - 1)); };
+
   const handleCreate = async () => {
-    if (!name.trim() || !description.trim()) { setError("Name and description are required."); return; }
     setSubmitting(true);
     setError("");
     try {
-      await onCreate({ name: name.trim(), description: description.trim(), type, level, weeklyChallenge: weeklyChallenge.trim() || undefined });
+      const payload: CreateLeagueInput = {
+        name: name.trim(),
+        description: description.trim(),
+        type, level, format,
+        weeklyChallenge: weeklyChallenge.trim() || undefined,
+        fees: fees.trim() || undefined,
+        rules: rules.trim() || undefined,
+      };
+      if (format === "traditional") {
+        Object.assign(payload, {
+          teamSize, seasonStart, seasonWeeks, meetDay, meetTime, scoringType,
+          pointSystem, absenteeScore,
+          ...(scoringType === "handicap" ? { handicapBase, handicapPercent } : {}),
+        });
+      }
+      await onCreate(payload);
       reset();
       onClose();
     } catch (e: any) {
@@ -163,107 +247,422 @@ function CreateLeagueModal({
     setSubmitting(false);
   };
 
+  const currentStepName = steps[step];
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }} />
+
         <View style={[createStyles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => { reset(); onClose(); }} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+          <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
             <Feather name="x" size={22} color={colors.foreground} />
           </TouchableOpacity>
-          <Text style={[createStyles.title, { color: colors.foreground }]}>Create League</Text>
+          <View style={{ alignItems: "center" }}>
+            <Text style={[createStyles.title, { color: colors.foreground }]}>Create League</Text>
+            <Text style={[createStyles.stepLabel, { color: colors.mutedForeground }]}>
+              Step {step + 1} of {steps.length} · {currentStepName}
+            </Text>
+          </View>
           <View style={{ width: 22 }} />
         </View>
 
-        <ScrollView contentContainerStyle={[createStyles.body, { paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled">
-          <Text style={[createStyles.label, { color: colors.foreground }]}>League Name *</Text>
-          <TextInput
-            style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
-            placeholder="e.g. Thunder Lanes Elite"
-            placeholderTextColor={colors.mutedForeground}
-            value={name}
-            onChangeText={setName}
-            maxLength={60}
-          />
+        <View style={[createStyles.progress, { backgroundColor: colors.muted }]}>
+          <View style={[createStyles.progressFill, { backgroundColor: colors.primary, width: `${((step + 1) / steps.length) * 100}%` }]} />
+        </View>
 
-          <Text style={[createStyles.label, { color: colors.foreground }]}>Description *</Text>
-          <TextInput
-            style={[createStyles.input, createStyles.multiline, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
-            placeholder="What's this league about?"
-            placeholderTextColor={colors.mutedForeground}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
-            maxLength={200}
-          />
+        <ScrollView contentContainerStyle={[createStyles.body, { paddingBottom: insets.bottom + 100 }]} keyboardShouldPersistTaps="handled">
 
-          <Text style={[createStyles.label, { color: colors.foreground }]}>Type</Text>
-          <View style={createStyles.toggleRow}>
-            {(["public", "private"] as const).map((t) => (
-              <TouchableOpacity
-                key={t}
-                style={[createStyles.toggleBtn, {
-                  backgroundColor: type === t ? colors.foreground : colors.card,
-                  borderColor: type === t ? colors.foreground : colors.border,
-                }]}
-                onPress={() => setType(t)}
-              >
-                <Feather name={t === "public" ? "globe" : "lock"} size={13} color={type === t ? colors.background : colors.mutedForeground} />
-                <Text style={[createStyles.toggleText, { color: type === t ? colors.background : colors.foreground }]}>
-                  {t === "public" ? "Public" : "Private"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {currentStepName === "Format" && (
+            <View style={{ gap: 12 }}>
+              <Text style={[createStyles.stepTitle, { color: colors.foreground }]}>How will this league run?</Text>
+              <Text style={[createStyles.stepSub, { color: colors.mutedForeground }]}>You can change other details later — but format is fixed once created.</Text>
+              {([
+                { key: "casual", icon: "users" as const, title: "Casual / Social", body: "Open group for friends or community. No fixed schedule or teams." },
+                { key: "traditional", icon: "award" as const, title: "Traditional League", body: "Weekly team play with handicap, points, and standings (USBC-style)." },
+              ] as const).map((opt) => {
+                const active = format === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[createStyles.formatCard, {
+                      backgroundColor: active ? colors.primary + "1a" : colors.card,
+                      borderColor: active ? colors.primary : colors.border,
+                    }]}
+                    onPress={() => setFormat(opt.key)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[createStyles.formatIcon, { backgroundColor: active ? colors.primary : colors.muted }]}>
+                      <Feather name={opt.icon} size={20} color={active ? colors.primaryForeground : colors.mutedForeground} />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={[createStyles.formatTitle, { color: colors.foreground }]}>{opt.title}</Text>
+                      <Text style={[createStyles.formatBody, { color: colors.mutedForeground }]}>{opt.body}</Text>
+                    </View>
+                    {active && <Feather name="check-circle" size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
-          <Text style={[createStyles.label, { color: colors.foreground }]}>Skill Level</Text>
-          <View style={createStyles.levelGrid}>
-            {LEVEL_OPTIONS.map((l) => {
-              const lc = LEVEL_COLORS[l] ?? colors.primary;
-              const active = level === l;
-              return (
-                <TouchableOpacity
-                  key={l}
-                  style={[createStyles.levelBtn, {
-                    backgroundColor: active ? lc + "33" : colors.card,
-                    borderColor: active ? lc : colors.border,
-                  }]}
-                  onPress={() => setLevel(l)}
-                >
-                  <Text style={[createStyles.levelBtnText, { color: active ? lc : colors.mutedForeground }]}>{l}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {currentStepName === "Basics" && (
+            <View>
+              <Text style={[createStyles.label, { color: colors.foreground }]}>League Name *</Text>
+              <TextInput
+                style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="e.g. Thunder Lanes Elite"
+                placeholderTextColor={colors.mutedForeground}
+                value={name} onChangeText={setName} maxLength={100}
+              />
 
-          <Text style={[createStyles.label, { color: colors.foreground }]}>Weekly Challenge <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>(optional)</Text></Text>
-          <TextInput
-            style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
-            placeholder="e.g. Hit 5 spares without stepping"
-            placeholderTextColor={colors.mutedForeground}
-            value={weeklyChallenge}
-            onChangeText={setWeeklyChallenge}
-            maxLength={120}
-          />
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Description *</Text>
+              <TextInput
+                style={[createStyles.input, createStyles.multiline, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="What's this league about?"
+                placeholderTextColor={colors.mutedForeground}
+                value={description} onChangeText={setDescription} multiline maxLength={500}
+              />
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Visibility</Text>
+              <View style={createStyles.toggleRow}>
+                {(["public", "private"] as const).map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[createStyles.toggleBtn, {
+                      backgroundColor: type === t ? colors.foreground : colors.card,
+                      borderColor: type === t ? colors.foreground : colors.border,
+                    }]}
+                    onPress={() => setType(t)}
+                  >
+                    <Feather name={t === "public" ? "globe" : "lock"} size={13} color={type === t ? colors.background : colors.mutedForeground} />
+                    <Text style={[createStyles.toggleText, { color: type === t ? colors.background : colors.foreground }]}>
+                      {t === "public" ? "Public" : "Private"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Skill Level</Text>
+              <View style={createStyles.levelGrid}>
+                {LEVEL_OPTIONS.map((l) => {
+                  const lc = LEVEL_COLORS[l] ?? colors.primary;
+                  const active = level === l;
+                  return (
+                    <TouchableOpacity
+                      key={l}
+                      style={[createStyles.levelBtn, {
+                        backgroundColor: active ? lc + "33" : colors.card,
+                        borderColor: active ? lc : colors.border,
+                      }]}
+                      onPress={() => setLevel(l)}
+                    >
+                      <Text style={[createStyles.levelBtnText, { color: active ? lc : colors.mutedForeground }]}>{l}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {currentStepName === "Team & Schedule" && (
+            <View>
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Team Size (bowlers per team)</Text>
+              <View style={createStyles.pillRow}>
+                {[2,3,4,5].map((n) => {
+                  const active = teamSize === n;
+                  return (
+                    <TouchableOpacity
+                      key={n}
+                      style={[createStyles.smallPill, {
+                        backgroundColor: active ? colors.foreground : colors.card,
+                        borderColor: active ? colors.foreground : colors.border,
+                      }]}
+                      onPress={() => setTeamSize(n)}
+                    >
+                      <Text style={[createStyles.smallPillText, { color: active ? colors.background : colors.foreground }]}>{n}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Season Start (YYYY-MM-DD)</Text>
+              <TextInput
+                style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="2026-06-01"
+                placeholderTextColor={colors.mutedForeground}
+                value={seasonStart} onChangeText={setSeasonStart} maxLength={10} autoCapitalize="none"
+              />
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Season Length (weeks)</Text>
+              <View style={createStyles.pillRow}>
+                {[8, 10, 12, 16, 20, 32].map((w) => {
+                  const active = seasonWeeks === w;
+                  return (
+                    <TouchableOpacity
+                      key={w}
+                      style={[createStyles.smallPill, {
+                        backgroundColor: active ? colors.foreground : colors.card,
+                        borderColor: active ? colors.foreground : colors.border,
+                      }]}
+                      onPress={() => setSeasonWeeks(w)}
+                    >
+                      <Text style={[createStyles.smallPillText, { color: active ? colors.background : colors.foreground }]}>{w}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Meet Day</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {MEET_DAYS_LIST.map((d) => {
+                  const active = meetDay === d;
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      style={[createStyles.smallPill, {
+                        backgroundColor: active ? colors.foreground : colors.card,
+                        borderColor: active ? colors.foreground : colors.border,
+                      }]}
+                      onPress={() => setMeetDay(d)}
+                    >
+                      <Text style={[createStyles.smallPillText, { color: active ? colors.background : colors.foreground }]}>
+                        {d.slice(0,3).toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Meet Time (24h, HH:MM)</Text>
+              <TextInput
+                style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="19:00"
+                placeholderTextColor={colors.mutedForeground}
+                value={meetTime} onChangeText={setMeetTime} maxLength={5} autoCapitalize="none"
+              />
+            </View>
+          )}
+
+          {currentStepName === "Scoring" && (
+            <View>
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Scoring Type</Text>
+              <View style={createStyles.toggleRow}>
+                {(["scratch", "handicap"] as const).map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[createStyles.toggleBtn, {
+                      backgroundColor: scoringType === t ? colors.foreground : colors.card,
+                      borderColor: scoringType === t ? colors.foreground : colors.border,
+                    }]}
+                    onPress={() => setScoringType(t)}
+                  >
+                    <Text style={[createStyles.toggleText, { color: scoringType === t ? colors.background : colors.foreground }]}>
+                      {t === "scratch" ? "Scratch" : "Handicap"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={[createStyles.helperText, { color: colors.mutedForeground }]}>
+                {scoringType === "scratch"
+                  ? "Raw scores only — best for similar skill levels."
+                  : "Lower averages get a bonus to make games competitive."}
+              </Text>
+
+              {scoringType === "handicap" && (
+                <>
+                  <Text style={[createStyles.label, { color: colors.foreground }]}>Handicap Base (target score)</Text>
+                  <View style={createStyles.pillRow}>
+                    {[200, 210, 220, 230, 240].map((n) => {
+                      const active = handicapBase === n;
+                      return (
+                        <TouchableOpacity
+                          key={n}
+                          style={[createStyles.smallPill, {
+                            backgroundColor: active ? colors.foreground : colors.card,
+                            borderColor: active ? colors.foreground : colors.border,
+                          }]}
+                          onPress={() => setHandicapBase(n)}
+                        >
+                          <Text style={[createStyles.smallPillText, { color: active ? colors.background : colors.foreground }]}>{n}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[createStyles.label, { color: colors.foreground }]}>Handicap Percentage</Text>
+                  <View style={createStyles.pillRow}>
+                    {[70, 80, 90, 100].map((n) => {
+                      const active = handicapPercent === n;
+                      return (
+                        <TouchableOpacity
+                          key={n}
+                          style={[createStyles.smallPill, {
+                            backgroundColor: active ? colors.foreground : colors.card,
+                            borderColor: active ? colors.foreground : colors.border,
+                          }]}
+                          onPress={() => setHandicapPercent(n)}
+                        >
+                          <Text style={[createStyles.smallPillText, { color: active ? colors.background : colors.foreground }]}>{n}%</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={[createStyles.helperText, { color: colors.mutedForeground }]}>
+                    Common USBC handicap: ({handicapBase} − avg) × {handicapPercent}%
+                  </Text>
+                </>
+              )}
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Point System</Text>
+              <View style={{ gap: 8 }}>
+                {Object.entries(POINT_SYSTEM_LABELS).map(([key, label]) => {
+                  const active = pointSystem === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[createStyles.optionRow, {
+                        backgroundColor: active ? colors.primary + "1a" : colors.card,
+                        borderColor: active ? colors.primary : colors.border,
+                      }]}
+                      onPress={() => setPointSystem(key)}
+                    >
+                      <Feather name={active ? "check-circle" : "circle"} size={16} color={active ? colors.primary : colors.mutedForeground} />
+                      <Text style={[createStyles.optionRowText, { color: colors.foreground }]}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Absentee Score</Text>
+              <View style={createStyles.pillRow}>
+                {[0, 120, 140, 160, 180].map((n) => {
+                  const active = absenteeScore === n;
+                  return (
+                    <TouchableOpacity
+                      key={n}
+                      style={[createStyles.smallPill, {
+                        backgroundColor: active ? colors.foreground : colors.card,
+                        borderColor: active ? colors.foreground : colors.border,
+                      }]}
+                      onPress={() => setAbsenteeScore(n)}
+                    >
+                      <Text style={[createStyles.smallPillText, { color: active ? colors.background : colors.foreground }]}>
+                        {n === 0 ? "None" : n}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[createStyles.helperText, { color: colors.mutedForeground }]}>
+                Default score used when a bowler is absent (without sub).
+              </Text>
+            </View>
+          )}
+
+          {currentStepName === "Extras" && (
+            <View>
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Weekly Challenge <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>(optional)</Text></Text>
+              <TextInput
+                style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="e.g. Hit 5 spares without stepping"
+                placeholderTextColor={colors.mutedForeground}
+                value={weeklyChallenge} onChangeText={setWeeklyChallenge} maxLength={200}
+              />
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>Fees <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>(optional)</Text></Text>
+              <TextInput
+                style={[createStyles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="e.g. $15/week — $10 lanes + $5 prize fund"
+                placeholderTextColor={colors.mutedForeground}
+                value={fees} onChangeText={setFees} maxLength={300}
+              />
+
+              <Text style={[createStyles.label, { color: colors.foreground }]}>House Rules <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>(optional)</Text></Text>
+              <TextInput
+                style={[createStyles.input, createStyles.multiline, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, minHeight: 120 }]}
+                placeholder="Eligibility, playoffs, absentee policy, etc."
+                placeholderTextColor={colors.mutedForeground}
+                value={rules} onChangeText={setRules} multiline maxLength={2000}
+              />
+            </View>
+          )}
+
+          {currentStepName === "Review" && (
+            <View style={{ gap: 10 }}>
+              <Text style={[createStyles.stepTitle, { color: colors.foreground }]}>Looks good?</Text>
+              <View style={[createStyles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <ReviewRow label="Format" value={format === "traditional" ? "Traditional League" : "Casual / Social"} />
+                <ReviewRow label="Name" value={name} />
+                <ReviewRow label="Type" value={type === "public" ? "Public" : "Private"} />
+                <ReviewRow label="Level" value={level} />
+                {format === "traditional" && (
+                  <>
+                    <ReviewRow label="Team Size" value={`${teamSize} bowlers`} />
+                    <ReviewRow label="Season" value={`${seasonWeeks} weeks starting ${seasonStart}`} />
+                    <ReviewRow label="Meets" value={`${meetDay.slice(0,1).toUpperCase()}${meetDay.slice(1)}s at ${meetTime}`} />
+                    <ReviewRow label="Scoring" value={scoringType === "handicap" ? `Handicap (${handicapPercent}% of ${handicapBase})` : "Scratch"} />
+                    <ReviewRow label="Points" value={POINT_SYSTEM_LABELS[pointSystem]} />
+                    <ReviewRow label="Absentee" value={absenteeScore === 0 ? "None" : String(absenteeScore)} />
+                  </>
+                )}
+                {weeklyChallenge && <ReviewRow label="Weekly Challenge" value={weeklyChallenge} />}
+                {fees && <ReviewRow label="Fees" value={fees} />}
+              </View>
+            </View>
+          )}
 
           {error ? <Text style={createStyles.error}>{error}</Text> : null}
-
-          <TouchableOpacity
-            style={[createStyles.createBtn, { backgroundColor: colors.primary, opacity: submitting ? 0.7 : 1 }]}
-            onPress={handleCreate}
-            disabled={submitting}
-            activeOpacity={0.85}
-          >
-            {submitting ? (
-              <ActivityIndicator color={colors.primaryForeground} size="small" />
-            ) : (
-              <Text style={[createStyles.createBtnText, { color: colors.primaryForeground }]}>Create League</Text>
-            )}
-          </TouchableOpacity>
         </ScrollView>
+
+        <View style={[createStyles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+          {step > 0 && (
+            <TouchableOpacity
+              style={[createStyles.footerBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+              onPress={goBack}
+              disabled={submitting}
+            >
+              <Feather name="arrow-left" size={16} color={colors.foreground} />
+              <Text style={[createStyles.footerBtnText, { color: colors.foreground }]}>Back</Text>
+            </TouchableOpacity>
+          )}
+          {currentStepName !== "Review" ? (
+            <TouchableOpacity
+              style={[createStyles.footerBtn, { backgroundColor: colors.primary, flex: 1 }]}
+              onPress={goNext}
+            >
+              <Text style={[createStyles.footerBtnText, { color: colors.primaryForeground }]}>Continue</Text>
+              <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[createStyles.footerBtn, { backgroundColor: colors.primary, flex: 1, opacity: submitting ? 0.7 : 1 }]}
+              onPress={handleCreate}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color={colors.primaryForeground} size="small" />
+              ) : (
+                <>
+                  <Feather name="check" size={16} color={colors.primaryForeground} />
+                  <Text style={[createStyles.footerBtnText, { color: colors.primaryForeground }]}>Create League</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  const colors = useColors();
+  return (
+    <View style={createStyles.reviewRow}>
+      <Text style={[createStyles.reviewLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[createStyles.reviewValue, { color: colors.foreground }]} numberOfLines={2}>{value}</Text>
+    </View>
   );
 }
 
@@ -422,7 +821,7 @@ export default function LeaguesScreen() {
         </Pressable>
       </Modal>
 
-      <CreateLeagueModal
+      <CreateLeagueWizard
         visible={createVisible}
         onClose={() => setCreateVisible(false)}
         onCreate={handleCreate}
@@ -490,19 +889,39 @@ const styles = StyleSheet.create({
 });
 
 const createStyles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
-  title: { fontSize: 18, fontWeight: "800" },
-  body: { paddingHorizontal: 20, paddingTop: 24, gap: 6 },
-  label: { fontSize: 13, fontWeight: "700", letterSpacing: 0.3, marginBottom: 4, marginTop: 12 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
+  title: { fontSize: 17, fontWeight: "800" },
+  stepLabel: { fontSize: 11, fontWeight: "600", marginTop: 3, letterSpacing: 0.3 },
+  progress: { height: 3, width: "100%" },
+  progressFill: { height: 3 },
+  body: { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
+  stepTitle: { fontSize: 20, fontWeight: "800", marginTop: 4 },
+  stepSub: { fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "700", letterSpacing: 0.3, marginBottom: 6, marginTop: 16 },
+  helperText: { fontSize: 12, lineHeight: 17, marginTop: 6, fontStyle: "italic" },
   input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
-  multiline: { height: 80, textAlignVertical: "top" },
+  multiline: { height: 90, textAlignVertical: "top" },
   toggleRow: { flexDirection: "row", gap: 10 },
   toggleBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderRadius: 14, paddingVertical: 12 },
   toggleText: { fontSize: 14, fontWeight: "700" },
   levelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   levelBtn: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 16, paddingVertical: 8 },
   levelBtnText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  error: { color: "#e05050", fontSize: 13, fontWeight: "600", marginTop: 8 },
-  createBtn: { borderRadius: 50, paddingVertical: 16, alignItems: "center", marginTop: 20 },
-  createBtnText: { fontSize: 15, fontWeight: "800" },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  smallPill: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 16, paddingVertical: 9, minWidth: 56, alignItems: "center" },
+  smallPillText: { fontSize: 13, fontWeight: "700" },
+  formatCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 2, borderRadius: 18, padding: 16 },
+  formatIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  formatTitle: { fontSize: 15, fontWeight: "800" },
+  formatBody: { fontSize: 13, lineHeight: 18 },
+  optionRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 14, padding: 12 },
+  optionRowText: { fontSize: 14, fontWeight: "600", flex: 1 },
+  reviewCard: { borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
+  reviewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  reviewLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 },
+  reviewValue: { fontSize: 14, fontWeight: "600", flex: 1, textAlign: "right" },
+  error: { color: "#e05050", fontSize: 13, fontWeight: "600", marginTop: 12, paddingHorizontal: 4 },
+  footer: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1 },
+  footerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 50, paddingHorizontal: 22, paddingVertical: 14 },
+  footerBtnText: { fontSize: 15, fontWeight: "800" },
 });

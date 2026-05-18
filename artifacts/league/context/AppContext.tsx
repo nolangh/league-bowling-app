@@ -223,6 +223,40 @@ export interface League {
   joined?: boolean;
   createdBy?: number | null;
   myRole?: "admin" | "member" | null;
+  format?: "casual" | "traditional";
+  teamSize?: number | null;
+  seasonStart?: string | null;
+  seasonWeeks?: number | null;
+  meetDay?: string | null;
+  meetTime?: string | null;
+  scoringType?: "scratch" | "handicap" | null;
+  handicapBase?: number | null;
+  handicapPercent?: number | null;
+  pointSystem?: string | null;
+  absenteeScore?: number | null;
+  fees?: string | null;
+  rules?: string | null;
+}
+
+export interface CreateLeagueInput {
+  name: string;
+  description: string;
+  type: "public" | "private";
+  level: string;
+  weeklyChallenge?: string;
+  format: "casual" | "traditional";
+  teamSize?: number;
+  seasonStart?: string;
+  seasonWeeks?: number;
+  meetDay?: string;
+  meetTime?: string;
+  scoringType?: "scratch" | "handicap";
+  handicapBase?: number;
+  handicapPercent?: number;
+  pointSystem?: string;
+  absenteeScore?: number;
+  fees?: string;
+  rules?: string;
 }
 
 export interface LeagueMember {
@@ -284,7 +318,7 @@ interface AppContextValue {
   unsaveMoment: (momentId: string) => Promise<void>;
   postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null, leagueId?: number | null) => Promise<void>;
   updateCommentCount: (momentId: string, delta: 1 | -1) => void;
-  createLeague: (input: { name: string; description: string; type: "public" | "private"; level: string; weeklyChallenge?: string }) => Promise<League>;
+  createLeague: (input: CreateLeagueInput) => Promise<League>;
   leaveLeague: (leagueId: string) => Promise<void>;
   balls: Ball[];
   createBall: (input: Partial<Ball> & { name: string }) => Promise<Ball>;
@@ -360,6 +394,19 @@ type ApiLeague = {
   type: string; level: string; avgScore: number;
   weeklyChallenge?: string | null; joined: boolean;
   createdBy?: number | null; myRole?: string | null;
+  format?: string | null;
+  teamSize?: number | null;
+  seasonStart?: string | null;
+  seasonWeeks?: number | null;
+  meetDay?: string | null;
+  meetTime?: string | null;
+  scoringType?: string | null;
+  handicapBase?: number | null;
+  handicapPercent?: number | null;
+  pointSystem?: string | null;
+  absenteeScore?: number | null;
+  fees?: string | null;
+  rules?: string | null;
 };
 type ApiUser = {
   id: number; name: string; username: string; rank: string;
@@ -450,6 +497,19 @@ function toLeague(l: ApiLeague): League {
     weeklyChallenge: l.weeklyChallenge ?? undefined,
     createdBy: l.createdBy ?? null,
     myRole: (l.myRole as League["myRole"]) ?? null,
+    format: (l.format as League["format"]) ?? "casual",
+    teamSize: l.teamSize ?? null,
+    seasonStart: l.seasonStart ?? null,
+    seasonWeeks: l.seasonWeeks ?? null,
+    meetDay: l.meetDay ?? null,
+    meetTime: l.meetTime ?? null,
+    scoringType: (l.scoringType as League["scoringType"]) ?? null,
+    handicapBase: l.handicapBase ?? null,
+    handicapPercent: l.handicapPercent ?? null,
+    pointSystem: l.pointSystem ?? null,
+    absenteeScore: l.absenteeScore ?? null,
+    fees: l.fees ?? null,
+    rules: l.rules ?? null,
   };
 }
 function toUser(u: ApiUser): UserProfile {
@@ -808,7 +868,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   };
 
-  const createLeague = async (input: { name: string; description: string; type: "public" | "private"; level: string; weeklyChallenge?: string }): Promise<League> => {
+  const createLeague = async (input: CreateLeagueInput): Promise<League> => {
     const created = await api.post<ApiLeague>("/leagues", input);
     const league = toLeague(created);
     setLeagues((prev) => [league, ...prev]);

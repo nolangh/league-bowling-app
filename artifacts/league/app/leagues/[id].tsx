@@ -31,6 +31,29 @@ const LEVEL_COLORS: Record<string, string> = {
 
 type Tab = "announcements" | "members";
 
+const POINT_SYSTEM_LABELS: Record<string, string> = {
+  standard: "Standard",
+  petersen: "Petersen Points",
+  head_to_head: "Head-to-Head",
+  total_pins: "Total Pins",
+};
+function pointSystemLabel(key: string): string {
+  return POINT_SYSTEM_LABELS[key] ?? key;
+}
+
+function InfoChip({ icon, label, value }: { icon: React.ComponentProps<typeof Feather>["name"]; label: string; value: string }) {
+  const colors = useColors();
+  return (
+    <View style={[styles.infoChip, { backgroundColor: colors.background }]}>
+      <Feather name={icon} size={12} color={colors.mutedForeground} />
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text style={[styles.infoChipLabel, { color: colors.mutedForeground }]}>{label}</Text>
+        <Text style={[styles.infoChipValue, { color: colors.foreground }]}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
 function MemberRow({
   member,
   isAdmin,
@@ -328,6 +351,65 @@ export default function LeagueDetailScreen() {
               <Text style={[styles.weeklyText, { color: colors.primary }]}>{league.weeklyChallenge}</Text>
             </View>
           )}
+
+          {league.format === "traditional" && (
+            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.infoCardHeader}>
+                <Feather name="award" size={14} color={colors.primary} />
+                <Text style={[styles.infoCardTitle, { color: colors.foreground }]}>Traditional League</Text>
+              </View>
+              <View style={styles.infoGrid}>
+                {league.teamSize != null && (
+                  <InfoChip icon="users" label="TEAM" value={`${league.teamSize} bowlers`} />
+                )}
+                {league.seasonWeeks != null && (
+                  <InfoChip icon="calendar" label="SEASON" value={`${league.seasonWeeks} weeks${league.seasonStart ? ` from ${league.seasonStart}` : ""}`} />
+                )}
+                {league.meetDay && league.meetTime && (
+                  <InfoChip icon="clock" label="MEETS" value={`${league.meetDay.charAt(0).toUpperCase()}${league.meetDay.slice(1)}s · ${league.meetTime}`} />
+                )}
+                {league.scoringType && (
+                  <InfoChip
+                    icon="bar-chart-2"
+                    label="SCORING"
+                    value={league.scoringType === "handicap"
+                      ? `Handicap${league.handicapPercent != null && league.handicapBase != null ? ` (${league.handicapPercent}% of ${league.handicapBase})` : ""}`
+                      : "Scratch"}
+                  />
+                )}
+                {league.pointSystem && (
+                  <InfoChip icon="target" label="POINTS" value={pointSystemLabel(league.pointSystem)} />
+                )}
+                {league.absenteeScore != null && league.absenteeScore > 0 && (
+                  <InfoChip icon="user-x" label="ABSENTEE" value={String(league.absenteeScore)} />
+                )}
+              </View>
+            </View>
+          )}
+
+          {(league.fees || league.rules) && (
+            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {league.fees && (
+                <View style={{ gap: 4 }}>
+                  <View style={styles.infoCardHeader}>
+                    <Feather name="dollar-sign" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.infoSubTitle, { color: colors.mutedForeground }]}>FEES</Text>
+                  </View>
+                  <Text style={[styles.infoBody, { color: colors.foreground }]}>{league.fees}</Text>
+                </View>
+              )}
+              {league.rules && (
+                <View style={{ gap: 4, marginTop: league.fees ? 12 : 0 }}>
+                  <View style={styles.infoCardHeader}>
+                    <Feather name="book-open" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.infoSubTitle, { color: colors.mutedForeground }]}>HOUSE RULES</Text>
+                  </View>
+                  <Text style={[styles.infoBody, { color: colors.foreground }]}>{league.rules}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={styles.actionRow}>
             {!isJoined ? (
               <TouchableOpacity
@@ -496,6 +578,15 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 8 },
   emptyTitle: { fontSize: 15, fontWeight: "700" },
   emptyText: { fontSize: 13, textAlign: "center", paddingHorizontal: 32, lineHeight: 18 },
+  infoCard: { borderRadius: 18, borderWidth: 1, padding: 14, gap: 12 },
+  infoCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  infoCardTitle: { fontSize: 13, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  infoSubTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
+  infoBody: { fontSize: 13, lineHeight: 19 },
+  infoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  infoChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, minWidth: "47%", flexGrow: 1 },
+  infoChipLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+  infoChipValue: { fontSize: 12, fontWeight: "700" },
 });
 
 const memberStyles = StyleSheet.create({
