@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Modal,
   Pressable,
   Platform,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -96,11 +97,22 @@ export default function LeaguesScreen() {
   const insets = useSafeAreaInsets();
   const { leagues, joinLeague } = useApp();
   const [filter, setFilter] = useState<"all" | "public" | "private">("all");
+  const [query, setQuery] = useState("");
   const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
 
-  const filtered =
-    filter === "all" ? leagues : leagues.filter((l) => l.type === filter);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return leagues.filter((l) => {
+      if (filter !== "all" && l.type !== filter) return false;
+      if (!q) return true;
+      return (
+        l.name.toLowerCase().includes(q) ||
+        (l.description?.toLowerCase().includes(q) ?? false) ||
+        l.level.toLowerCase().includes(q)
+      );
+    });
+  }, [leagues, filter, query]);
 
   const handleJoin = (league: League) => {
     joinLeague(league.id);
@@ -122,6 +134,24 @@ export default function LeaguesScreen() {
         <View style={[styles.countBadge, { backgroundColor: colors.card }]}>
           <Text style={[styles.countText, { color: colors.foreground }]}>{leagues.length}</Text>
         </View>
+      </View>
+
+      <View style={[styles.searchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Feather name="search" size={16} color={colors.mutedForeground} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.foreground }]}
+          placeholder="Search leagues by name, level, or vibe…"
+          placeholderTextColor={colors.mutedForeground}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery("")} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+            <Feather name="x-circle" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.filterRow}>
@@ -153,9 +183,19 @@ export default function LeaguesScreen() {
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {filtered.map((l) => (
-          <LeagueCard key={l.id} league={l} onJoin={() => handleJoin(l)} />
-        ))}
+        {filtered.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Feather name="search" size={28} color={colors.mutedForeground} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No leagues found</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              {query ? `Nothing matches "${query}"` : "Try a different filter"}
+            </Text>
+          </View>
+        ) : (
+          filtered.map((l) => (
+            <LeagueCard key={l.id} league={l} onJoin={() => handleJoin(l)} />
+          ))
+        )}
       </ScrollView>
 
       <Modal visible={successVisible} transparent animationType="fade">
@@ -198,6 +238,11 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 12, fontWeight: "500", marginTop: 2, letterSpacing: 0.5 },
   countBadge: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
   countText: { fontSize: 16, fontWeight: "800" },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  searchInput: { flex: 1, fontSize: 14, fontWeight: "500", padding: 0 },
+  emptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 8 },
+  emptyTitle: { fontSize: 16, fontWeight: "700" },
+  emptyText: { fontSize: 13, fontWeight: "500" },
   filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 12 },
   filterPill: { borderWidth: 1, borderRadius: 50, paddingHorizontal: 16, paddingVertical: 8 },
   filterText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
