@@ -1,0 +1,46 @@
+1. League Creation & Configuration
+Easy setup wizard: Name, type (scratch/handicap), team size, season dates/length, schedule generation (auto round-robin or manual).
+Handicap settings (base, %, individual/team, recalc rules).
+Point system presets + custom options.
+Rules configuration or selection from USBC-style templates (averages, absentee, playoffs, eligibility, fees, etc.).
+Fees/prize fund setup, public vs. private leagues, divisions (optional).
+Roles: League admin/secretary, treasurer, team captains.
+2. Discovery, Joining & Onboarding
+Search/browse leagues (location, type, skill level, open spots, handicap/scratch).
+View details, rules summary, current standings/schedule.
+Join as individual or create/join a team + invite friends.
+Approval flows or open registration.
+New bowler onboarding (average establishment, rules explanation, etiquette).
+3. Team & Roster Management
+Create/edit teams, manage rosters and substitute lists.
+Player profiles with averages, history, and stats.
+4. Scheduling & Operations
+Auto or manual schedule generation.
+Lane assignments and notifications.
+Support for postponements, pre-bowling, and position rounds.
+Split-season and playoff configuration (various formats: total pins, best-of, stepladder, etc.).
+5. Score Entry, Averages & Handicaps
+Manual score entry or integration/import from bowling center scoring systems.
+Automatic calculation of averages, handicaps (per game/series), team totals, and points.
+Handling of absentees (absentee score logic), substitutes, vacancies, and tardy players.
+Real-time or post-session updates.
+6. Standings, Stats & Reporting
+Real-time or updated standings (team points, records).
+Rich individual/team stats (average, high game/series, handicap scores, trends, most improved).
+Leaderboards and historical archives.
+Printable recaps, financial reports, and award eligibility tracking.
+7. Communication & Engagement
+Push notifications (upcoming league, lane assignments, standings updates).
+In-app announcements, chat, or highlights sharing.
+Social/community features to enhance the “league experience.”
+8. Admin & Moderation Tools
+Dashboards for secretaries/treasurers.
+Rule enforcement/logging and dispute/protest handling.
+Participation tracking and eligibility reports.
+Multi-league support (for centers or power users).
+9. Additional/Advanced
+Mobile-first experience (bowlers view everything on phone).
+Analytics and personal improvement tracking.
+Support for USBC sanctioning/export if desired.
+Hybrid/virtual elements or unique formats (no-tap, etc.).
+Strong data accuracy and edge-case handling (new bowlers, few games bowled, etc.).
