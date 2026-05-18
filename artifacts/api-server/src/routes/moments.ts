@@ -52,6 +52,7 @@ async function formatMoment(row: Record<string, unknown>, userId: number) {
     avatarColor: row.avatar_color,
     mediaUrl: row.media_url ?? null,
     mediaType: row.media_type ?? null,
+    leagueId: row.league_id ?? null,
     createdAt: row.created_at,
     liked: !!likeRes.data,
     disliked: !!dislikeRes.data,
@@ -94,15 +95,17 @@ router.get("/moments/search", async (req, res): Promise<void> => {
 });
 
 router.get("/moments", async (req, res): Promise<void> => {
-  const tag = (req.query.tag as string ?? "").trim().toLowerCase().replace(/^#/, "");
+  const tag      = (req.query.tag as string ?? "").trim().toLowerCase().replace(/^#/, "");
+  const leagueId = req.query.leagueId ? parseInt(String(req.query.leagueId)) : null;
 
   let query = supabaseAdmin
     .from("moments")
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (tag) {
-    query = query.contains("tags", [tag]);
+  if (tag) query = query.contains("tags", [tag]);
+  if (leagueId && !isNaN(leagueId)) {
+    query = query.eq("league_id", leagueId);
   }
 
   const { data, error } = await query;
@@ -191,6 +194,10 @@ router.post("/moments", async (req, res): Promise<void> => {
       media_type:
         typeof (req.body as Record<string, unknown>)?.mediaType === "string"
           ? ((req.body as Record<string, unknown>).mediaType as string)
+          : null,
+    league_id:
+        typeof (req.body as Record<string, unknown>)?.leagueId === "number"
+          ? ((req.body as Record<string, unknown>).leagueId as number)
           : null,
     })
     .select()

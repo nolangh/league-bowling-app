@@ -143,6 +143,7 @@ export interface Moment {
   avatarColor: string;
   mediaUrl?: string | null;
   mediaType?: string | null;
+  leagueId?: number | null;
   createdAt?: string;
 }
 
@@ -220,6 +221,30 @@ export interface League {
   avgScore: number;
   weeklyChallenge?: string;
   joined?: boolean;
+  createdBy?: number | null;
+  myRole?: "admin" | "member" | null;
+}
+
+export interface LeagueMember {
+  userId: number;
+  role: "admin" | "member";
+  status: string;
+  joinedAt: string;
+  username: string;
+  name: string;
+  rank: string;
+  careerAvg: number;
+  highGame: number;
+}
+
+export interface LeagueAnnouncement {
+  id: number;
+  leagueId: number;
+  authorId: number;
+  username: string;
+  rank: string;
+  content: string;
+  createdAt: string;
 }
 
 const RANK_COLORS: Record<Rank, string> = {
@@ -257,7 +282,10 @@ interface AppContextValue {
   toggleDislikeMoment: (momentId: string) => void;
   saveMoment: (momentId: string, listId?: number) => Promise<void>;
   unsaveMoment: (momentId: string) => Promise<void>;
-  postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null) => Promise<void>;
+  postMoment: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null, leagueId?: number | null) => Promise<void>;
+  updateCommentCount: (momentId: string, delta: 1 | -1) => void;
+  createLeague: (input: { name: string; description: string; type: "public" | "private"; level: string; weeklyChallenge?: string }) => Promise<League>;
+  leaveLeague: (leagueId: string) => Promise<void>;
   balls: Ball[];
   createBall: (input: Partial<Ball> & { name: string }) => Promise<Ball>;
   updateBall: (id: string, patch: Partial<Ball>) => Promise<void>;
@@ -331,6 +359,7 @@ type ApiLeague = {
   id: number; name: string; description: string; members: number;
   type: string; level: string; avgScore: number;
   weeklyChallenge?: string | null; joined: boolean;
+  createdBy?: number | null; myRole?: string | null;
 };
 type ApiUser = {
   id: number; name: string; username: string; rank: string;
@@ -414,7 +443,14 @@ function toNotification(n: ApiNotification): Notification {
   };
 }
 function toLeague(l: ApiLeague): League {
-  return { ...l, id: String(l.id), type: l.type as League["type"], weeklyChallenge: l.weeklyChallenge ?? undefined };
+  return {
+    ...l,
+    id: String(l.id),
+    type: l.type as League["type"],
+    weeklyChallenge: l.weeklyChallenge ?? undefined,
+    createdBy: l.createdBy ?? null,
+    myRole: (l.myRole as League["myRole"]) ?? null,
+  };
 }
 function toUser(u: ApiUser): UserProfile {
   return {
@@ -505,7 +541,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ?? (raw as { mediaType?: string | null }).mediaType ?? null,
           createdAt: raw.created_at,
         };
-        setMoments((prev) => [newMoment, ...prev]);
+        setMoments((prev) => {
+          // deduplicate: Realtime fires even for our own inserts
+          if (prev.some((m) => m.id === String(raw.id))) return prev;
+          return [newMoment, ...prev];
+        });
       })
       .subscribe();
     realtimeRef.current = channel;
@@ -603,6 +643,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* keep optimistic */ }
   };
 
+  const updateCommentCount = (momentId: string, delta: 1 | -1) => {
+    setMoments((prev) =>
+      prev.map((m) => m.id === momentId ? { ...m, comments: Math.max(0, m.comments + delta) } : m)
+    );
+  };
+
   const postMoment = async (
     content: string,
     type: Moment["type"],
@@ -610,10 +656,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     tags?: string[],
     mediaUrl?: string | null,
     mediaType?: string | null,
+    leagueId?: number | null,
   ) => {
     try {
-      const created = await api.post<ApiMoment>("/moments", { content, type, score, tags, mediaUrl, mediaType });
-      setMoments((prev) => [toMoment(created), ...prev]);
+      const created = await api.post<ApiMoment>("/moments", { content, type, score, tags, mediaUrl, mediaType, leagueId });
+      const moment = toMoment(created);
+      // Add to list only if not already there (Realtime may have fired first)
+      setMoments((prev) => prev.some((m) => m.id === moment.id) ? prev : [moment, ...prev]);
     } catch {
       const newMoment: Moment = {
         id: Date.now().toString(),
@@ -759,6 +808,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   };
 
+  const createLeague = async (input: { name: string; description: string; type: "public" | "private"; level: string; weeklyChallenge?: string }): Promise<League> => {
+    const created = await api.post<ApiLeague>("/leagues", input);
+    const league = toLeague(created);
+    setLeagues((prev) => [league, ...prev]);
+    return league;
+  };
+
+  const leaveLeague = async (leagueId: string): Promise<void> => {
+    await api.delete(`/leagues/${leagueId}/leave`);
+    setLeagues((prev) => prev.map((l) => l.id === leagueId ? { ...l, joined: false, myRole: null } : l));
+  };
+
   const searchLeagues = async (q: string, type: "all" | "public" | "private" = "all") => {
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
@@ -813,7 +874,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logGame, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment,
       balls, createBall, updateBall, deleteBall, refreshBalls,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
-      setUserPro, updateSpecs, setHomeAlley, joinLeague, searchLeagues, refreshAll,
+      setUserPro, updateSpecs, setHomeAlley,
+      joinLeague, createLeague, leaveLeague, searchLeagues, refreshAll,
+      updateCommentCount,
       sendFriendRequest, acceptFriendRequest, removeFriend,
       inbox, inboxCount, fetchInbox, markInboxRead, reactToMoment, shareMoment,
     }}>

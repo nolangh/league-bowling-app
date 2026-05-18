@@ -193,10 +193,11 @@ function MomentVideo({ url }: { url: string }) {
   );
 }
 
-function PostComposer({ visible, onClose, onPost }: {
+function PostComposer({ visible, onClose, onPost, leagueId }: {
   visible: boolean;
   onClose: () => void;
-  onPost: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null) => void;
+  onPost: (content: string, type: Moment["type"], score?: number, tags?: string[], mediaUrl?: string | null, mediaType?: string | null, leagueId?: number | null) => void;
+  leagueId?: number | null;
 }) {
   const colors = useColors();
   const [content, setContent] = useState("");
@@ -251,7 +252,7 @@ function PostComposer({ visible, onClose, onPost }: {
     const tagMatches = content.match(/#(\w+)/g) ?? [];
     const tags = tagMatches.map((t) => t.slice(1).toLowerCase());
     const parsedScore = score && !isNaN(parseInt(score)) ? parseInt(score) : undefined;
-    onPost(content.trim(), type, parsedScore, tags, uploadedUrl, uploadedKind);
+    onPost(content.trim(), type, parsedScore, tags, uploadedUrl, uploadedKind, leagueId ?? null);
     setContent("");
     setScore("");
     setType("advice");
@@ -534,9 +535,11 @@ export default function MomentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { moments, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment, inboxCount, reactToMoment, shareMoment } = useApp();
+  const { moments, leagues, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, postMoment, inboxCount, reactToMoment, shareMoment } = useApp();
 
+  const joinedLeagues = leagues.filter((l) => l.joined);
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -583,7 +586,7 @@ export default function MomentsScreen() {
     { key: "advice" as FilterKey, label: "TIPS", icon: null },
   ];
 
-  const displayMoments = searchText.trim()
+  const baseFiltered = searchText.trim()
     ? searchResults
     : activeTag
     ? moments.filter((m) => m.tags.includes(activeTag))
@@ -592,6 +595,10 @@ export default function MomentsScreen() {
     : filter === "saved"
     ? moments.filter((m) => m.saved)
     : moments.filter((m) => m.type === filter || (filter === "game" && m.type === "strike"));
+
+  const displayMoments = leagueFilter
+    ? baseFiltered.filter((m) => m.leagueId != null && String(m.leagueId) === leagueFilter)
+    : baseFiltered;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -687,6 +694,43 @@ export default function MomentsScreen() {
         </ScrollView>
       )}
 
+      {!showSearch && !activeTag && joinedLeagues.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
+          <TouchableOpacity
+            style={[styles.filterPill, {
+              flexDirection: "row", alignItems: "center", gap: 5,
+              backgroundColor: leagueFilter === null ? colors.foreground : colors.card,
+              borderColor: leagueFilter === null ? colors.foreground : colors.border,
+            }]}
+            onPress={() => setLeagueFilter(null)}
+          >
+            <Feather name="globe" size={11} color={leagueFilter === null ? colors.background : colors.mutedForeground} />
+            <Text style={[styles.filterText, { color: leagueFilter === null ? colors.background : colors.mutedForeground }]}>
+              ALL
+            </Text>
+          </TouchableOpacity>
+          {joinedLeagues.map((l) => {
+            const active = leagueFilter === l.id;
+            return (
+              <TouchableOpacity
+                key={l.id}
+                style={[styles.filterPill, {
+                  flexDirection: "row", alignItems: "center", gap: 5,
+                  backgroundColor: active ? colors.primary : colors.card,
+                  borderColor: active ? colors.primary : colors.border,
+                }]}
+                onPress={() => setLeagueFilter(active ? null : l.id)}
+              >
+                <Feather name="shield" size={11} color={active ? colors.primaryForeground : colors.mutedForeground} />
+                <Text style={[styles.filterText, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
+                  {l.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
       <ScrollView
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
@@ -727,6 +771,7 @@ export default function MomentsScreen() {
         visible={composerVisible}
         onClose={() => setComposerVisible(false)}
         onPost={postMoment}
+        leagueId={leagueFilter ? parseInt(leagueFilter) : null}
       />
 
       <SaveModal

@@ -20,6 +20,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useColors } from "@/hooks/useColors";
 import { RankBadge } from "@/components/RankBadge";
 import { useApp, type Moment, type Comment, type Rank } from "@/context/AppContext";
+import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
 
 type ApiMoment = {
@@ -58,7 +59,8 @@ export default function MomentDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { moments, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment } = useApp();
+  const router = useRouter();
+  const { moments, toggleLikeMoment, toggleDislikeMoment, saveMoment, unsaveMoment, updateCommentCount } = useApp();
 
   const [moment, setMoment] = useState<Moment | null>(
     moments.find((m) => m.id === id) ?? null
@@ -151,6 +153,7 @@ export default function MomentDetailScreen() {
       };
       setComments((prev) => [...prev, newComment]);
       setMoment((prev) => prev ? { ...prev, comments: prev.comments + 1 } : prev);
+      updateCommentCount(String(id), 1);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     } catch { setCommentText(text); }
@@ -162,6 +165,7 @@ export default function MomentDetailScreen() {
     await api.delete(`/moments/${id}/comments/${comment.id}`);
     setComments((prev) => prev.filter((c) => c.id !== comment.id));
     setMoment((prev) => prev ? { ...prev, comments: Math.max(0, prev.comments - 1) } : prev);
+    updateCommentCount(String(id), -1);
   };
 
   if (!moment) {
