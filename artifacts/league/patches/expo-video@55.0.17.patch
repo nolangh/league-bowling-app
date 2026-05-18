@@ -1,0 +1,47 @@
+--- artifacts/league/node_modules/expo-video/build/VideoPlayer.js	2026-05-17 18:33:14.584131169 +0000
++++ node_modules/.pnpm_patches/expo-video@55.0.17/build/VideoPlayer.js	2026-05-18 05:57:44.336805146 +0000
+@@ -20,9 +20,31 @@
+  * @param source -  A video source that is used to initialize the player.
+  * @param playerBuilderOptions - Options to apply to the Android player builder before the native constructor is invoked.
+  */
+-export function createVideoPlayer(source, playerBuilderOptions) {
++function safeCreatePlayer(source, setup, playerBuilderOptions) {
+     const parsedSource = parseSource(source);
+-    return new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions);
++    try {
++        const player = new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions);
++        setup?.(player);
++        return player;
++    } catch (e) {
++        const msg = String(e?.message ?? "");
++        if (msg.includes("3 arguments") && msg.includes("1 was expected")) {
++            const player = new NativeVideoModule.VideoPlayer(parsedSource);
++            setup?.(player);
++            return player;
++        }
++        throw e;
++    }
++}
++/**
++ * Creates a direct instance of `VideoPlayer` that doesn't release automatically.
++ *
++ * > **info** For most use cases you should use the [`useVideoPlayer`](#usevideoplayersource-setup) hook instead. See the [Using the VideoPlayer Directly](#using-the-videoplayer-directly) section for more details.
++ * @param source -  A video source that is used to initialize the player.
++ * @param playerBuilderOptions - Options to apply to the Android player builder before the native constructor is invoked.
++ */
++export function createVideoPlayer(source, playerBuilderOptions) {
++    return safeCreatePlayer(source, undefined, playerBuilderOptions);
+ }
+ /**
+  * Creates a `VideoPlayer`, which will be automatically cleaned up when the component is unmounted.
+@@ -33,9 +55,7 @@
+ export function useVideoPlayer(source, setup, playerBuilderOptions) {
+     const parsedSource = parseSource(source);
+     return useReleasingSharedObject(() => {
+-        const player = new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions);
+-        setup?.(player);
+-        return player;
++        return safeCreatePlayer(source, setup, playerBuilderOptions);
+     }, [JSON.stringify(parsedSource), JSON.stringify(playerBuilderOptions)]);
+ }
+ function parseSource(source) {
