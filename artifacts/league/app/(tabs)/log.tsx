@@ -918,23 +918,6 @@ export default function LogScreen() {
           )}
           <TouchableOpacity
             style={[styles.methodCard, { backgroundColor: colors.card, borderColor: colors.primary }]}
-            onPress={() => setStep("frames")}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.methodIcon, { backgroundColor: colors.primary + "22" }]}>
-              <Feather name="grid" size={24} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.methodTitle, { color: colors.foreground }]}>Frame by Frame</Text>
-              <Text style={[styles.methodSub, { color: colors.mutedForeground }]}>
-                Enter each frame manually · Auto-calculates total
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.methodCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
               const first = activeBalls[0] ?? null;
               setActiveShotBall(first);
@@ -942,8 +925,8 @@ export default function LogScreen() {
             }}
             activeOpacity={0.85}
           >
-            <View style={[styles.methodIcon, { backgroundColor: colors.card }]}>
-              <Feather name="zap" size={24} color={colors.foreground} />
+            <View style={[styles.methodIcon, { backgroundColor: colors.primary + "22" }]}>
+              <Feather name="zap" size={24} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.methodTitle, { color: colors.foreground }]}>Shot Logger</Text>
