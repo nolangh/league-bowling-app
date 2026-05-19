@@ -35,10 +35,14 @@ type LocationMeta = {
 type Step =
   | "method"
   | "frames"
+  | "shot-logger"
   | "analyzing"
   | "confirm"
   | "details"
   | "verifying";
+
+type ShotBallIds = { b1: number | null; b2: number | null; b3: number | null };
+const EMPTY_SHOT_BALLS: ShotBallIds[] = Array.from({ length: 10 }, () => ({ b1: null, b2: null, b3: null }));
 
 const OIL_PATTERNS = ["House Shot", "Sport Shot", "Challenge Pattern", "PBA Shot", "Other"];
 
@@ -517,6 +521,10 @@ export default function LogScreen() {
   const [locationMeta, setLocationMeta] = useState<LocationMeta | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
+  // Shot logger state
+  const [shotBallIds, setShotBallIds] = useState<ShotBallIds[]>(EMPTY_SHOT_BALLS);
+  const [activeShotBall, setActiveShotBall] = useState<Ball | null>(null);
+
   // Details state
   const [alley, setAlley] = useState<string>("");
   const [alleyMeta, setAlleyMeta] = useState<AlleyPlace | null>(null);
@@ -529,6 +537,19 @@ export default function LogScreen() {
   const frameScores = calcFrameScores(frames);
   const currentTotal = totalScore(frames);
   const done = allFramesComplete(frames);
+
+  // Auto-advance from shot-logger to details when all frames are complete
+  React.useEffect(() => {
+    if (step === "shot-logger" && done) {
+      // Pre-fill ballUsed from the first shot's ball
+      const firstBallId = shotBallIds[0]?.b1;
+      if (firstBallId !== null && firstBallId !== undefined) {
+        const firstBall = activeBalls.find((b) => Number(b.id) === firstBallId);
+        if (firstBall) setSelectedBall(firstBall);
+      }
+      setStep("details");
+    }
+  }, [step, done]);
 
   const recent5 = games.slice(0, 5);
   const recentAvg =
@@ -543,6 +564,8 @@ export default function LogScreen() {
     setPhotoUri(null);
     setLocationMeta(null);
     setAnalyzeError(null);
+    setShotBallIds(EMPTY_SHOT_BALLS);
+    setActiveShotBall(null);
     setAlley("");
     setAlleyMeta(null);
     setOilPattern(OIL_PATTERNS[0]);
@@ -642,6 +665,47 @@ export default function LogScreen() {
     if (activeBall === 3 && f.ball2 !== null && f.ball2 < 10 && (f.ball1 === 10 || (f.ball1 !== null && f.ball2 !== null && f.ball1 + f.ball2 === 10))) return true;
     return false;
   }, [frames, activeFrame, activeBall]);
+
+  // ── Shot logger helpers ───────────────────────────────────────────────────
+
+  const shotLoggerMaxPins = useCallback((): number => {
+    const f = frames[activeFrame];
+    if (activeBall === 1) return 10;
+    if (activeBall === 2) {
+      if (activeFrame === 9 && f.ball1 === 10) return 10;
+      return 10 - (f.ball1 ?? 0);
+    }
+    if (activeBall === 3) {
+      if (f.ball2 === 10) return 10;
+      return 10 - (f.ball2 ?? 0);
+    }
+    return 10;
+  }, [frames, activeFrame, activeBall]);
+
+  const handleShotPin = useCallback((pins: number) => {
+    const ball = activeShotBall;
+    const ballId = ball ? Number(ball.id) : null;
+
+    setFrames((prev) => {
+      const next = prev.map((f) => ({ ...f }));
+      const f = next[activeFrame];
+      if (activeBall === 1) { f.ball1 = pins; f.ball2 = null; f.ball3 = null; }
+      else if (activeBall === 2) { f.ball2 = pins; f.ball3 = null; }
+      else { f.ball3 = pins; }
+      advanceCursor(next, activeFrame, activeBall);
+      return next;
+    });
+
+    setShotBallIds((prev) => {
+      const next = prev.map((r) => ({ ...r }));
+      if (activeBall === 1) next[activeFrame].b1 = ballId;
+      else if (activeBall === 2) next[activeFrame].b2 = ballId;
+      else next[activeFrame].b3 = ballId;
+      return next;
+    });
+
+    Haptics.selectionAsync();
+  }, [activeShotBall, activeFrame, activeBall, advanceCursor]);
 
   // ── Photo scorecard flow ──────────────────────────────────────────────────
 
@@ -781,13 +845,20 @@ export default function LogScreen() {
       ballId: selectedBall ? Number(selectedBall.id) : null,
       notes,
       verified: !!photoUri,
-      frames,
       scorecardImageUrl,
       latitude: locationMeta?.latitude ?? alleyMeta?.lat ?? null,
       longitude: locationMeta?.longitude ?? alleyMeta?.lng ?? null,
       locationName: locationMeta?.locationName ?? alleyMeta?.address ?? alleyMeta?.name ?? null,
       capturedAt: locationMeta?.capturedAt ?? null,
-      entryMethod: photoUri ? "photo" : "manual",
+      entryMethod: step === "details" && !photoUri
+        ? (shotBallIds.some((s) => s.b1 !== null) ? "shot-logger" : "manual")
+        : photoUri ? "photo" : "manual",
+      frames: frames.map((f, i) => ({
+        ...f,
+        ball1Id: shotBallIds[i]?.b1 ?? null,
+        ball2Id: shotBallIds[i]?.b2 ?? null,
+        ball3Id: shotBallIds[i]?.b3 ?? null,
+      })),
     } as Parameters<typeof logGame>[0]);
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -864,6 +935,27 @@ export default function LogScreen() {
 
           <TouchableOpacity
             style={[styles.methodCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => {
+              const first = activeBalls[0] ?? null;
+              setActiveShotBall(first);
+              setStep("shot-logger");
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.methodIcon, { backgroundColor: colors.card }]}>
+              <Feather name="zap" size={24} color={colors.foreground} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.methodTitle, { color: colors.foreground }]}>Shot Logger</Text>
+              <Text style={[styles.methodSub, { color: colors.mutedForeground }]}>
+                Score + ball per shot · Tracks per-ball stats
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.methodCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handlePhotoScorecard}
             activeOpacity={0.85}
           >
@@ -878,6 +970,129 @@ export default function LogScreen() {
             </View>
             <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
           </TouchableOpacity>
+        </>
+      );
+    }
+
+    if (step === "shot-logger") {
+      const maxPins = shotLoggerMaxPins();
+      const pinButtons = Array.from({ length: maxPins + 1 }, (_, i) => i);
+      const shotLabel = activeBall === 1 ? "1st Ball" : activeBall === 2 ? "2nd Ball" : "3rd Ball";
+      const frameScoresNow = calcFrameScores(frames);
+      const runningTotal = totalScore(frames);
+      const noBalls = activeBalls.length === 0;
+
+      return (
+        <>
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <TouchableOpacity onPress={() => setStep("method")}>
+              <Feather name="arrow-left" size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            <Text style={[styles.sheetTitle, { color: colors.foreground, marginBottom: 0 }]}>Shot Logger</Text>
+            <View style={{ width: 20 }} />
+          </View>
+
+          {/* Frame / shot indicator */}
+          <View style={[styles.shotFrameCard, { backgroundColor: colors.card }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.shotFrameLabel, { color: colors.mutedForeground }]}>FRAME</Text>
+              <Text style={[styles.shotFrameNum, { color: colors.foreground }]}>{activeFrame + 1} <Text style={{ fontSize: 16, fontWeight: "500", color: colors.mutedForeground }}>/ 10</Text></Text>
+            </View>
+            <View style={[styles.shotFrameDivider, { backgroundColor: colors.border }]} />
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <Text style={[styles.shotFrameLabel, { color: colors.mutedForeground }]}>SHOT</Text>
+              <Text style={[styles.shotFrameNum, { color: colors.primary }]}>{shotLabel}</Text>
+            </View>
+            <View style={[styles.shotFrameDivider, { backgroundColor: colors.border }]} />
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text style={[styles.shotFrameLabel, { color: colors.mutedForeground }]}>RUNNING</Text>
+              <Text style={[styles.shotFrameNum, { color: runningTotal > 0 ? colors.foreground : colors.mutedForeground }]}>
+                {runningTotal > 0 ? runningTotal : "—"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Ball selector */}
+          <View style={{ marginBottom: 2 }}>
+            <Text style={[styles.shotSectionLabel, { color: colors.mutedForeground }]}>BALL USED</Text>
+            {noBalls ? (
+              <Text style={[styles.shotNoBalls, { color: colors.mutedForeground }]}>
+                No balls in your arsenal — add them in Profile to track per-ball stats
+              </Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+                {activeBalls.map((b) => {
+                  const isSel = activeShotBall?.id === b.id;
+                  return (
+                    <TouchableOpacity
+                      key={b.id}
+                      style={[
+                        styles.shotBallPill,
+                        {
+                          backgroundColor: isSel ? colors.primary : colors.card,
+                          borderColor: isSel ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => { Haptics.selectionAsync(); setActiveShotBall(b); }}
+                      activeOpacity={0.75}
+                    >
+                      {isSel && <Feather name="check" size={13} color={colors.primaryForeground} />}
+                      <Text
+                        style={[
+                          styles.shotBallPillText,
+                          { color: isSel ? colors.primaryForeground : colors.foreground },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {b.name}
+                      </Text>
+                      {b.brand ? (
+                        <Text style={[styles.shotBallBrand, { color: isSel ? colors.primaryForeground + "bb" : colors.mutedForeground }]} numberOfLines={1}>
+                          {b.brand}
+                        </Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Pin count buttons */}
+          <Text style={[styles.shotSectionLabel, { color: colors.mutedForeground }]}>PINS KNOCKED DOWN</Text>
+          <View style={styles.shotPinGrid}>
+            {pinButtons.map((n) => {
+              const isStrikeBtn = n === 10 && activeBall === 1;
+              return (
+                <TouchableOpacity
+                  key={n}
+                  style={[
+                    styles.shotPinBtn,
+                    {
+                      backgroundColor: isStrikeBtn ? colors.primary + "22" : colors.card,
+                      borderColor: isStrikeBtn ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => handleShotPin(n)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.shotPinBtnText, { color: isStrikeBtn ? colors.primary : colors.foreground }]}>
+                    {isStrikeBtn ? "X" : String(n)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Mini scorecard for reference */}
+          <ScorecardGrid
+            frames={frames}
+            activeFrame={activeFrame}
+            activeBall={activeBall}
+            frameScores={frameScoresNow}
+            colors={colors}
+          />
         </>
       );
     }
@@ -1267,4 +1482,17 @@ const styles = StyleSheet.create({
   noFramesSub: { fontSize: 12, textAlign: "center", lineHeight: 18 },
   notesBlock: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 14, padding: 14, marginTop: 12 },
   notesText: { flex: 1, fontSize: 13, lineHeight: 20 },
+  // Shot logger
+  shotFrameCard: { flexDirection: "row", alignItems: "center", borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, marginBottom: 14 },
+  shotFrameDivider: { width: 1, height: 36, marginHorizontal: 12 },
+  shotFrameLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1, marginBottom: 2 },
+  shotFrameNum: { fontSize: 22, fontWeight: "900" },
+  shotSectionLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1, marginBottom: 8 },
+  shotNoBalls: { fontSize: 12, lineHeight: 18 },
+  shotBallPill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 50, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 8, maxWidth: 160 },
+  shotBallPillText: { fontSize: 13, fontWeight: "700", flexShrink: 1 },
+  shotBallBrand: { fontSize: 10, fontWeight: "500", flexShrink: 1 },
+  shotPinGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", marginBottom: 14 },
+  shotPinBtn: { width: 56, height: 54, borderRadius: 14, borderWidth: 1.5, justifyContent: "center", alignItems: "center" },
+  shotPinBtnText: { fontSize: 20, fontWeight: "800" },
 });
