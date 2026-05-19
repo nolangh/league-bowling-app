@@ -20,6 +20,7 @@ import { useColors } from "@/hooks/useColors";
 import { useApp, getRankColor } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { AlleyPicker } from "@/components/AlleyPicker";
+import { StatExportModal } from "@/components/StatExportModal";
 import { useSubscription } from "@/lib/revenuecat";
 
 export default function ProfileScreen() {
@@ -32,6 +33,7 @@ export default function ProfileScreen() {
   const [proModalVisible, setProModalVisible] = useState(false);
   const [purchaseConfirmVisible, setPurchaseConfirmVisible] = useState(false);
   const [specsModalVisible, setSpecsModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const [alleyPickerOpen, setAlleyPickerOpen] = useState(false);
   const [draftRevRate, setDraftRevRate] = useState("");
   const [draftBallSpeed, setDraftBallSpeed] = useState("");
@@ -370,6 +372,52 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* Pro-only: Export Stats */}
+        {(isSubscribed || user.isPro) ? (
+          <TouchableOpacity
+            style={[styles.settingsCard, { backgroundColor: colors.card }]}
+            activeOpacity={0.8}
+            onPress={() => { setExportModalVisible(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          >
+            <View style={[styles.settingsRow]}>
+              <View style={[styles.exportIconBox, { backgroundColor: colors.primary + "22" }]}>
+                <Feather name="download" size={16} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingsLabel, { color: colors.foreground }]}>Export Stats</Text>
+                <Text style={[styles.exportSubLabel, { color: colors.mutedForeground }]}>
+                  Download your stats as a CSV
+                </Text>
+              </View>
+              <View style={[styles.proBadge, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.proBadgeText, { color: colors.primaryForeground }]}>PRO</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.settingsCard, { backgroundColor: colors.card, opacity: 0.7 }]}
+            activeOpacity={0.8}
+            onPress={() => setProModalVisible(true)}
+          >
+            <View style={[styles.settingsRow]}>
+              <View style={[styles.exportIconBox, { backgroundColor: colors.border }]}>
+                <Feather name="lock" size={16} color={colors.mutedForeground} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingsLabel, { color: colors.mutedForeground }]}>Export Stats</Text>
+                <Text style={[styles.exportSubLabel, { color: colors.mutedForeground }]}>
+                  Upgrade to Pro to export your data
+                </Text>
+              </View>
+              <View style={[styles.proBadge, { backgroundColor: colors.border }]}>
+                <Text style={[styles.proBadgeText, { color: colors.mutedForeground }]}>PRO</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Settings */}
         <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
           {[
@@ -622,6 +670,11 @@ export default function ProfileScreen() {
         onPick={(a) => setHomeAlley(a)}
         title="Set Home Alley"
       />
+
+      <StatExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+      />
     </View>
   );
 }
@@ -686,7 +739,9 @@ const styles = StyleSheet.create({
   // Settings
   settingsCard: { borderRadius: 16, overflow: "hidden", marginBottom: 8 },
   settingsRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
-  settingsLabel: { flex: 1, fontSize: 15, fontFamily: "DMSans_500Medium" },
+  settingsLabel: { fontSize: 15, fontFamily: "DMSans_500Medium" },
+  exportIconBox: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  exportSubLabel: { fontSize: 12, fontFamily: "DMSans_400Regular", marginTop: 1 },
   // Modals
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   bottomSheet: {
