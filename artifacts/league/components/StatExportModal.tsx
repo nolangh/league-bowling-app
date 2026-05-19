@@ -20,6 +20,22 @@ import { useApp } from "@/context/AppContext";
 
 type SectionKey = "profile" | "games" | "balls";
 
+const BALL_GAME_COLS = ["date", "score", "alley", "oilPattern"] as const;
+type BallGameCol = (typeof BALL_GAME_COLS)[number];
+const BALL_GAME_HEADERS: Record<BallGameCol, string> = {
+  date: "Date",
+  score: "Score",
+  alley: "Alley",
+  oilPattern: "Oil Pattern",
+};
+type GameLike = ReturnType<typeof useApp>["games"][number];
+const BALL_GAME_GETTERS: Record<BallGameCol, (g: GameLike) => string | number | null | undefined> = {
+  date: (g) => g.date,
+  score: (g) => g.score,
+  alley: (g) => g.alley,
+  oilPattern: (g) => g.oilPattern,
+};
+
 type ProfileField = {
   key: string;
   label: string;
@@ -107,6 +123,7 @@ function buildCsv(
   profileFields: Set<string>,
   gameFields: Set<string>,
   ballFields: Set<string>,
+  perBallBreakdown: boolean,
 ): string {
   const parts: string[] = [];
 
@@ -138,6 +155,21 @@ function buildCsv(
     parts.push(activeCols.map((f) => csvCell(f.header)).join(","));
     for (const b of balls) {
       parts.push(activeCols.map((f) => csvCell(f.getValue(b))).join(","));
+
+      if (perBallBreakdown) {
+        const ballGames = games.filter((g) => {
+          if (g.ballId != null) return String(g.ballId) === b.id;
+          return g.ballUsed === b.name;
+        });
+        if (ballGames.length > 0) {
+          parts.push(BALL_GAME_COLS.map((c) => csvCell(BALL_GAME_HEADERS[c])).join(","));
+          for (const g of ballGames) {
+            parts.push(
+              BALL_GAME_COLS.map((c) => csvCell(BALL_GAME_GETTERS[c](g))).join(",")
+            );
+          }
+        }
+      }
     }
     parts.push("");
   }
@@ -169,6 +201,8 @@ export function StatExportModal({ visible, onClose }: Props) {
   const [ballFields, setBallFields] = useState<Set<string>>(
     () => new Set(BALL_FIELDS.map((f) => f.key))
   );
+
+  const [perBallBreakdown, setPerBallBreakdown] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [expanded, setExpanded] = useState<SectionKey | null>(null);
@@ -202,7 +236,7 @@ export function StatExportModal({ visible, onClose }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setExporting(true);
     try {
-      const csv = buildCsv(user, games, balls, sections, profileFields, gameFields, ballFields);
+      const csv = buildCsv(user, games, balls, sections, profileFields, gameFields, ballFields, perBallBreakdown);
       if (!csv.trim()) return;
 
       const filename = `league_stats_${user.username}_${new Date().toISOString().slice(0, 10)}.csv`;
@@ -259,6 +293,10 @@ export function StatExportModal({ visible, onClose }: Props) {
     footer: { paddingHorizontal: 20, paddingTop: 16, gap: 10 },
     exportBtn: { paddingVertical: 16, borderRadius: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
     exportBtnText: { fontSize: 16, fontWeight: "700" },
+    breakdownRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
+    breakdownInfo: { flex: 1 },
+    breakdownLabel: { fontSize: 14, fontWeight: "600" },
+    breakdownSub: { fontSize: 12, marginTop: 2 },
   });
 
   return (
@@ -417,6 +455,30 @@ export function StatExportModal({ visible, onClose }: Props) {
                               </TouchableOpacity>
                             );
                           })}
+                        </View>
+
+                        <View style={[s.breakdownRow, { borderTopColor: colors.border }]}>
+                          <View style={s.breakdownInfo}>
+                            <Text style={[s.breakdownLabel, { color: colors.foreground }]}>Include per-ball game breakdown</Text>
+                            <Text style={[s.breakdownSub, { color: colors.mutedForeground }]}>
+                              Each ball is followed by its game rows (date, score, alley, oil pattern)
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => { setPerBallBreakdown((v) => !v); Haptics.selectionAsync(); }}
+                            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                            style={{ padding: 4 }}
+                          >
+                            <View style={[
+                              { width: 44, height: 26, borderRadius: 13, padding: 2, justifyContent: "center" },
+                              { backgroundColor: perBallBreakdown ? colors.primary : colors.border }
+                            ]}>
+                              <View style={[
+                                { width: 22, height: 22, borderRadius: 11, backgroundColor: "#fff" },
+                                { alignSelf: perBallBreakdown ? "flex-end" : "flex-start" }
+                              ]} />
+                            </View>
+                          </TouchableOpacity>
                         </View>
                       </>
                     )}
