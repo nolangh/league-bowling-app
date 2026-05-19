@@ -21,6 +21,7 @@ import { useApp, getRankColor } from "@/context/AppContext";
 import { RankBadge } from "@/components/RankBadge";
 import { AlleyPicker } from "@/components/AlleyPicker";
 import { StatExportModal } from "@/components/StatExportModal";
+import { ScheduledReportModal } from "@/components/ScheduledReportModal";
 import { useSubscription } from "@/lib/revenuecat";
 
 export default function ProfileScreen() {
@@ -34,6 +35,7 @@ export default function ProfileScreen() {
   const [purchaseConfirmVisible, setPurchaseConfirmVisible] = useState(false);
   const [specsModalVisible, setSpecsModalVisible] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
   const [alleyPickerOpen, setAlleyPickerOpen] = useState(false);
   const [draftRevRate, setDraftRevRate] = useState("");
   const [draftBallSpeed, setDraftBallSpeed] = useState("");
@@ -418,6 +420,60 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Pro-only: Scheduled Reports */}
+        {(isSubscribed || user.isPro) ? (
+          <TouchableOpacity
+            style={[styles.settingsCard, { backgroundColor: colors.card }]}
+            activeOpacity={0.8}
+            onPress={() => { setScheduleModalVisible(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          >
+            <View style={[styles.settingsRow]}>
+              <View style={[styles.exportIconBox, { backgroundColor: colors.primary + "22" }]}>
+                <Feather name="mail" size={16} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingsLabel, { color: colors.foreground }]}>Scheduled Reports</Text>
+                <Text style={[styles.exportSubLabel, { color: colors.mutedForeground }]}>
+                  {user.reportSchedule
+                    ? `${user.reportSchedule === "weekly" ? "Weekly" : "Monthly"} report active`
+                    : "Get stats emailed automatically"}
+                </Text>
+              </View>
+              {user.reportSchedule ? (
+                <View style={[styles.proBadge, { backgroundColor: "#22c55e" }]}>
+                  <Text style={[styles.proBadgeText, { color: "#ffffff" }]}>ON</Text>
+                </View>
+              ) : (
+                <View style={[styles.proBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.proBadgeText, { color: colors.primaryForeground }]}>PRO</Text>
+                </View>
+              )}
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.settingsCard, { backgroundColor: colors.card, opacity: 0.7 }]}
+            activeOpacity={0.8}
+            onPress={() => setProModalVisible(true)}
+          >
+            <View style={[styles.settingsRow]}>
+              <View style={[styles.exportIconBox, { backgroundColor: colors.border }]}>
+                <Feather name="lock" size={16} color={colors.mutedForeground} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingsLabel, { color: colors.mutedForeground }]}>Scheduled Reports</Text>
+                <Text style={[styles.exportSubLabel, { color: colors.mutedForeground }]}>
+                  Upgrade to Pro to enable email reports
+                </Text>
+              </View>
+              <View style={[styles.proBadge, { backgroundColor: colors.border }]}>
+                <Text style={[styles.proBadgeText, { color: colors.mutedForeground }]}>PRO</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Settings */}
         <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
           {[
@@ -674,6 +730,11 @@ export default function ProfileScreen() {
       <StatExportModal
         visible={exportModalVisible}
         onClose={() => setExportModalVisible(false)}
+      />
+
+      <ScheduledReportModal
+        visible={scheduleModalVisible}
+        onClose={() => setScheduleModalVisible(false)}
       />
     </View>
   );

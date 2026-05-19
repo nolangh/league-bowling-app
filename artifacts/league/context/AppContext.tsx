@@ -40,6 +40,9 @@ export interface UserProfile {
   homeAlleyLat?: number | null;
   homeAlleyLng?: number | null;
   homeAlleyOsmId?: string | null;
+  // Scheduled reports
+  reportSchedule?: "weekly" | "monthly" | null;
+  reportEmail?: string | null;
 }
 
 export interface AlleyPlace {
@@ -332,6 +335,9 @@ interface AppContextValue {
   setUserPro: (isPro: boolean) => void;
   updateSpecs: (specs: Partial<Pick<UserProfile, "revRate"|"ballSpeed"|"axisTilt"|"axisRotation"|"papOver"|"papUp"|"releaseStyle"|"gripStyle"|"dominantHand">>) => Promise<void>;
   setHomeAlley: (alley: AlleyPlace | null) => Promise<void>;
+  updateReportSchedule: (schedule: "weekly" | "monthly" | null, email?: string | null) => Promise<void>;
+  sendReportNow: () => Promise<{ sentTo: string }>;
+
   joinLeague: (leagueId: string) => void;
   searchLeagues: (q: string, type?: "all" | "public" | "private") => Promise<void>;
   refreshAll: () => Promise<void>;
@@ -426,6 +432,8 @@ type ApiUser = {
   homeAlleyLat?: number | null;
   homeAlleyLng?: number | null;
   homeAlleyOsmId?: string | null;
+  reportSchedule?: string | null;
+  reportEmail?: string | null;
 };
 
 function toGame(g: ApiGame): Game { return { ...g, id: String(g.id) }; }
@@ -528,10 +536,12 @@ function toUser(u: ApiUser): UserProfile {
     releaseStyle: u.releaseStyle ?? null,
     gripStyle:    u.gripStyle ?? null,
     dominantHand: u.dominantHand ?? null,
-    homeAlleyName:  u.homeAlleyName ?? null,
-    homeAlleyLat:   u.homeAlleyLat ?? null,
-    homeAlleyLng:   u.homeAlleyLng ?? null,
-    homeAlleyOsmId: u.homeAlleyOsmId ?? null,
+    homeAlleyName:   u.homeAlleyName ?? null,
+    homeAlleyLat:    u.homeAlleyLat ?? null,
+    homeAlleyLng:    u.homeAlleyLng ?? null,
+    homeAlleyOsmId:  u.homeAlleyOsmId ?? null,
+    reportSchedule:  (u.reportSchedule as "weekly" | "monthly" | null) ?? null,
+    reportEmail:     u.reportEmail ?? null,
   };
 }
 
@@ -927,6 +937,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   };
 
+  const updateReportSchedule = async (
+    schedule: "weekly" | "monthly" | null,
+    email?: string | null,
+  ) => {
+    const prev = user;
+    setUser((u) => ({ ...u, reportSchedule: schedule, ...(email !== undefined ? { reportEmail: email } : {}) }));
+    try {
+      const body: Record<string, unknown> = { schedule };
+      if (email !== undefined) body.email = email;
+      await api.patch("/stat-reports/schedule", body);
+      const updated = await api.get<ApiUser>("/users/me");
+      setUser(toUser(updated));
+    } catch (err) {
+      setUser(prev);
+      throw err;
+    }
+  };
+
+  const sendReportNow = async (): Promise<{ sentTo: string }> => {
+    return api.post<{ sentTo: string; success: boolean }>("/stat-reports/send");
+  };
+
   return (
     <AppContext.Provider value={{
       user, games, challenges, myActiveChallenges, acceptedChallenges, completedChallenges,
@@ -935,6 +967,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       balls, createBall, updateBall, deleteBall, refreshBalls,
       acceptChallenge, postChallenge, deleteChallenge, completeChallenge,
       setUserPro, updateSpecs, setHomeAlley,
+      updateReportSchedule, sendReportNow,
       joinLeague, createLeague, leaveLeague, searchLeagues, refreshAll,
       updateCommentCount,
       sendFriendRequest, acceptFriendRequest, removeFriend,

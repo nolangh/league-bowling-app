@@ -9,6 +9,7 @@
     "seed:league": "tsx ./src/seedLeague.ts",
     "seed:supabase": "tsx ./src/seedSupabase.ts",
     "seed:ball-catalog": "tsx ./src/seedBallCatalog.ts",
+    "migrate:report-schedule": "tsx ./src/migrateReportSchedule.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

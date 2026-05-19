@@ -66,6 +66,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
 
+  /stat-reports/schedule:
+    get:
+      operationId: getReportSchedule
+      tags: [users]
+      summary: Get current user's scheduled report settings
+      responses:
+        "200":
+          description: Schedule settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportScheduleSettings"
+    patch:
+      operationId: updateReportSchedule
+      tags: [users]
+      summary: Update scheduled report preference (Pro only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportScheduleBody"
+      responses:
+        "200":
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportScheduleSettings"
+        "403":
+          description: Pro subscription required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stat-reports/send:
+    post:
+      operationId: sendStatReport
+      tags: [users]
+      summary: Send a stat report email now (Pro only)
+      responses:
+        "200":
+          description: Report sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  sentTo:
+                    type: string
+                required: [success, sentTo]
+        "403":
+          description: Pro subscription required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stat-reports/dispatch:
+    post:
+      operationId: dispatchScheduledReports
+      tags: [users]
+      summary: Cron endpoint — dispatch all due scheduled reports (secured by CRON_SECRET)
+      responses:
+        "200":
+          description: Dispatch complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  sent:
+                    type: integer
+                  failed:
+                    type: integer
+                  candidates:
+                    type: integer
+                required: [success, sent, failed, candidates]
+        "401":
+          description: Missing or invalid CRON_SECRET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /games:
     get:
       operationId: listGames
@@ -389,6 +479,32 @@ components:
           type: string
         isPro:
           type: boolean
+
+    ReportScheduleSettings:
+      type: object
+      properties:
+        schedule:
+          type: ["string", "null"]
+          enum: ["weekly", "monthly", null]
+        email:
+          type: ["string", "null"]
+        isPro:
+          type: boolean
+      required:
+        - schedule
+        - email
+        - isPro
+
+    UpdateReportScheduleBody:
+      type: object
+      properties:
+        schedule:
+          type: ["string", "null"]
+          enum: ["weekly", "monthly", null]
+        email:
+          type: ["string", "null"]
+      required:
+        - schedule
 
     Game:
       type: object

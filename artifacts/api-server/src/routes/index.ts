@@ -13,6 +13,7 @@ import dislikesRouter from "./dislikes";
 import inboxRouter from "./inbox";
 import reactionsRouter from "./reactions";
 import reportsRouter from "./reports";
+import statReportsRouter from "./stat-reports";
 import ballsRouter from "./balls";
 import scorecardRouter from "./scorecard";
 import alleysRouter from "./alleys";
@@ -34,6 +35,7 @@ router.use(dislikesRouter);
 router.use(inboxRouter);
 router.use(reactionsRouter);
 router.use(reportsRouter);
+router.use(statReportsRouter);
 router.use(ballsRouter);
 router.use(alleysRouter);
 

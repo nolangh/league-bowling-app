@@ -7,7 +7,7 @@ export async function supabaseAuthMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  if (req.path === "/healthz") {
+  if (req.path === "/healthz" || req.path === "/stat-reports/dispatch") {
     next();
     return;
   }
