@@ -164,13 +164,18 @@ function displayBall(val: number | null, prev: number | null, isFirst: boolean):
 
 // ─── Game row ─────────────────────────────────────────────────────────────────
 
-function GameRow({ game }: { game: Game }) {
+function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
   const colors = useColors();
   const date = new Date(game.date);
   const formatted = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const hasScorecard = Array.isArray(game.frames) && game.frames.length === 10;
 
   return (
-    <View style={[styles.gameRow, { backgroundColor: colors.card }]}>
+    <TouchableOpacity
+      style={[styles.gameRow, { backgroundColor: colors.card }]}
+      onPress={onPress}
+      activeOpacity={0.78}
+    >
       <View style={[styles.scoreBox, { backgroundColor: colors.primary }]}>
         <Text style={[styles.scoreBoxNum, { color: colors.primaryForeground }]}>{game.score}</Text>
       </View>
@@ -192,11 +197,168 @@ function GameRow({ game }: { game: Game }) {
             <Text style={[styles.verifiedText, { color: colors.primary }]}>VERIFIED</Text>
           </View>
         )}
-        {game.notes ? (
+        {hasScorecard ? (
+          <Feather name="grid" size={14} color={colors.mutedForeground} />
+        ) : game.notes ? (
           <Feather name="file-text" size={14} color={colors.mutedForeground} />
         ) : null}
       </View>
-    </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Scorecard detail modal ────────────────────────────────────────────────────
+
+function ScorecardDetailModal({
+  game,
+  onClose,
+  colors,
+}: {
+  game: Game | null;
+  onClose: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  if (!game) return null;
+
+  const frames: FrameData[] = Array.isArray(game.frames) && game.frames.length === 10
+    ? game.frames
+    : Array.from({ length: 10 }, () => ({ ball1: null, ball2: null, ball3: null }));
+
+  const frameScores = calcFrameScores(frames);
+  const date = new Date(game.date);
+  const formatted = date.toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+  });
+
+  const hasFrameData = Array.isArray(game.frames) && game.frames.length === 10;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable
+          style={[styles.bottomSheet, { backgroundColor: colors.background }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.gameName, { color: colors.foreground, fontSize: 18 }]} numberOfLines={1}>
+                {game.alley}
+              </Text>
+              <Text style={[styles.gameMeta, { color: colors.mutedForeground, marginTop: 2 }]}>
+                {formatted} · {game.oilPattern}
+              </Text>
+              {game.ballUsed ? (
+                <Text style={[styles.gameMeta, { color: colors.mutedForeground }]}>
+                  <Feather name="circle" size={10} /> {game.ballUsed}
+                </Text>
+              ) : null}
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 6 }}>
+              <View style={[styles.scoreBox, { backgroundColor: colors.primary, width: 60, height: 60, borderRadius: 16 }]}>
+                <Text style={[styles.scoreBoxNum, { color: colors.primaryForeground, fontSize: 24 }]}>{game.score}</Text>
+              </View>
+              {game.verified && (
+                <View style={[styles.verifiedBadge, { backgroundColor: colors.primary + "22" }]}>
+                  <Feather name="check-circle" size={10} color={colors.primary} />
+                  <Text style={[styles.verifiedText, { color: colors.primary }]}>VERIFIED</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Scorecard */}
+          {hasFrameData ? (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginBottom: 8 }]}>
+                SCORECARD
+              </Text>
+              <ScorecardGrid
+                frames={frames}
+                activeFrame={-1}
+                activeBall={1}
+                frameScores={frameScores}
+                colors={colors}
+              />
+
+              {/* Frame breakdown list */}
+              <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginTop: 20, marginBottom: 10 }]}>
+                FRAME BREAKDOWN
+              </Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 260 }}>
+                {frames.map((frame, i) => {
+                  const score = frameScores[i];
+                  const strike = frame.ball1 === 10 && i < 9;
+                  const spare = !strike && frame.ball1 !== null && frame.ball2 !== null && frame.ball1 + frame.ball2 === 10;
+                  const label = strike ? "Strike" : spare ? "Spare" : i === 9 ? "10th Frame" : "Open";
+                  const labelColor = strike ? colors.primary : spare ? "#ff9500" : colors.mutedForeground;
+
+                  const b1 = displayBall(frame.ball1, null, true);
+                  const b2 = i === 9
+                    ? displayBall(frame.ball2, frame.ball1, frame.ball2 === 10)
+                    : displayBall(frame.ball2, frame.ball1, false);
+                  const b3 = i === 9 && frame.ball3 !== null
+                    ? displayBall(frame.ball3, null, frame.ball3 === 10)
+                    : null;
+
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.frameBreakdownRow,
+                        { backgroundColor: colors.card, borderColor: strike ? colors.primary + "44" : "transparent" },
+                      ]}
+                    >
+                      <View style={[styles.frameBreakdownNum, { backgroundColor: strike ? colors.primary + "22" : colors.muted + "55" }]}>
+                        <Text style={[styles.frameBreakdownNumText, { color: strike ? colors.primary : colors.mutedForeground }]}>
+                          {i + 1}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.frameBreakdownLabel, { color: labelColor }]}>{label}</Text>
+                        <Text style={[styles.frameBreakdownBalls, { color: colors.mutedForeground }]}>
+                          {[b1, b2, b3].filter(Boolean).join("  ·  ")}
+                        </Text>
+                      </View>
+                      <Text style={[styles.frameBreakdownScore, { color: score !== null ? colors.foreground : colors.mutedForeground }]}>
+                        {score !== null ? score : "—"}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
+          ) : (
+            <View style={[styles.noFramesBlock, { backgroundColor: colors.card }]}>
+              <Feather name="grid" size={28} color={colors.mutedForeground} />
+              <Text style={[styles.noFramesText, { color: colors.mutedForeground }]}>
+                No frame data for this game
+              </Text>
+              <Text style={[styles.noFramesSub, { color: colors.mutedForeground }]}>
+                Frame-by-frame scorecards are saved for games logged with the frame entry method.
+              </Text>
+            </View>
+          )}
+
+          {game.notes ? (
+            <View style={[styles.notesBlock, { backgroundColor: colors.card }]}>
+              <Feather name="file-text" size={14} color={colors.mutedForeground} />
+              <Text style={[styles.notesText, { color: colors.foreground }]}>{game.notes}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: colors.primary, marginTop: 16 }]}
+            onPress={onClose}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.nextBtnText, { color: colors.primaryForeground }]}>Done</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -345,6 +507,7 @@ export default function LogScreen() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [step, setStep] = useState<Step>("method");
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null);
 
   // Frame state
   const [frames, setFrames] = useState<FrameData[]>(EMPTY_FRAMES);
@@ -972,7 +1135,13 @@ export default function LogScreen() {
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No games logged yet</Text>
           </View>
         ) : (
-          games.map((g) => <GameRow key={g.id} game={g} />)
+          games.map((g) => (
+            <GameRow
+              key={g.id}
+              game={g}
+              onPress={() => { Haptics.selectionAsync(); setSelectedGame(g); }}
+            />
+          ))
         )}
       </ScrollView>
 
@@ -1002,6 +1171,12 @@ export default function LogScreen() {
         onClose={() => setAlleyPickerOpen(false)}
         onPick={(a) => { setAlley(a.name); setAlleyMeta(a); }}
         title="Where did you bowl?"
+      />
+
+      <ScorecardDetailModal
+        game={selectedGame}
+        onClose={() => setSelectedGame(null)}
+        colors={colors}
       />
     </View>
   );
@@ -1080,4 +1255,16 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 12 },
   // Error
   errorBanner: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 12 },
+  // Frame breakdown (scorecard detail modal)
+  frameBreakdownRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1 },
+  frameBreakdownNum: { width: 32, height: 32, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  frameBreakdownNumText: { fontSize: 13, fontWeight: "800" },
+  frameBreakdownLabel: { fontSize: 13, fontWeight: "700" },
+  frameBreakdownBalls: { fontSize: 12, marginTop: 2 },
+  frameBreakdownScore: { fontSize: 18, fontWeight: "900", minWidth: 36, textAlign: "right" },
+  noFramesBlock: { borderRadius: 16, padding: 24, alignItems: "center", gap: 10 },
+  noFramesText: { fontSize: 14, fontWeight: "700" },
+  noFramesSub: { fontSize: 12, textAlign: "center", lineHeight: 18 },
+  notesBlock: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 14, padding: 14, marginTop: 12 },
+  notesText: { flex: 1, fontSize: 13, lineHeight: 20 },
 });
