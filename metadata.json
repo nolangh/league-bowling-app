@@ -1,0 +1,11 @@
+{
+  "name": "League Bowling App",
+  "description": "Bowling companion app with skill challenges, score logging, leagues, social moments feed, and leaderboards",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
